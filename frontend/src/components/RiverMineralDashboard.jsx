@@ -6,7 +6,7 @@ const DEFAULT_RIVERS = [
   { id: "ganga", name: "Ganga River Basin", states: "Uttarakhand, UP, Bihar, Jharkhand, West Bengal", outlet: "Bay of Bengal", plastic_tons_yr: 115000, microplastic_conc: "420 particles/m?", damage_score: 84, damage_level: "Critical", water_impact: "High urban sewage, industrial effluent, and macro/microplastic transport into the Sundarbans delta." },
   { id: "yamuna", name: "Yamuna River Basin", states: "Uttarakhand, Himachal, Haryana, Delhi, UP", outlet: "Ganga (Prayagraj)", plastic_tons_yr: 48500, microplastic_conc: "510 particles/m?", damage_score: 88, damage_level: "Severe", water_impact: "Severe dissolved oxygen depletion and industrial chemical foam across the Delhi?Agra stretch." },
   { id: "brahmaputra", name: "Brahmaputra River Basin", states: "Arunachal Pradesh, Assam, Meghalaya", outlet: "Bay of Bengal", plastic_tons_yr: 34200, microplastic_conc: "190 particles/m?", damage_score: 56, damage_level: "Moderate", water_impact: "Monsoon siltation and flood-driven plastic runoff across Assam valley wetlands." },
-  { id: "mahanadi", name: "Mahanadi River Basin", states: "Chhattisgarh, Odisha", outlet: "Bay of Bengal", plastic_tons_yr: 29400, microplastic_conc: "235 particles/m?", damage_score: 64, damage_level: "Elevated", water_impact: "Mining runoff, thermal ash, and municipal waste along Raipur?Cuttack corridor." },
+  { id: "mahanadi", name: "Mahanadi River Basin", states: "Chhattisgarh, Odisha", outlet: "Bay of Bengal", plastic_tons_yr: 29400, microplastic_conc: "235 particles/m?", damage_score: 64, damage_level: "Elevated", water_impact: "Mining runoff, thermal ash, and municipal waste along Raipur°Cuttack corridor." },
   { id: "godavari", name: "Godavari River Basin", states: "Maharashtra, Telangana, Chhattisgarh, Andhra Pradesh", outlet: "Bay of Bengal", plastic_tons_yr: 38900, microplastic_conc: "260 particles/m?", damage_score: 68, damage_level: "Elevated", water_impact: "Agricultural fertilizer runoff and industrial discharge near Nashik and Rajahmundry." },
   { id: "krishna", name: "Krishna River Basin", states: "Maharashtra, Karnataka, Telangana, Andhra Pradesh", outlet: "Bay of Bengal", plastic_tons_yr: 31800, microplastic_conc: "245 particles/m?", damage_score: 65, damage_level: "Elevated", water_impact: "Reservoir trapping of microplastics and urban discharge from Pune and Vijayawada." },
   { id: "narmada", name: "Narmada River Basin", states: "Madhya Pradesh, Maharashtra, Gujarat", outlet: "Arabian Sea", plastic_tons_yr: 18600, microplastic_conc: "155 particles/m?", damage_score: 49, damage_level: "Moderate", water_impact: "Relatively lower industrial plastic load with localized estuarine accumulation at Bharuch." },
@@ -130,14 +130,14 @@ export default function RiverMineralDashboard({ onLocationChange }) {
     setClickedPin([latNum, lonNum]);
     setInspectLoading(true);
     setInspectData({
-      place_name: `Clicked Position (${latNum}? N, ${lonNum}? E)`,
+      place_name: `Clicked Position (${latNum}° N, ${lonNum}° E)`,
       lat: latNum,
       lon: lonNum,
       weather: {},
       air_quality: {}
     });
     if (typeof onLocationChange === "function") {
-      onLocationChange({ name: `Pin (${latNum}?N, ${lonNum}?E)`, lat: latNum, lng: lonNum });
+      onLocationChange({ name: `Pin (${latNum}°N, ${lonNum}°E)`, lat: latNum, lng: lonNum });
     }
     try {
       const res = await fetch(`${window.location.origin}/api/map-inspect?lat=${latNum}&lon=${lonNum}`);
@@ -373,7 +373,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
               <>Minerals Found in {riverNameMap[selectedRiverId.toLowerCase()]} ({filteredMinerals.length} Deposits)</>
             )}
             {selectedMineralType && !selectedRiverId && (
-              <>River Basins Containing {selectedMineralType} ({filteredRivers.length} Basins ? {filteredMinerals.length} Deposits)</>
+              <>River Basins Containing {selectedMineralType} ({filteredRivers.length} Basins - {filteredMinerals.length} Deposits)</>
             )}
             {selectedRiverId && selectedMineralType && (
               <>{selectedMineralType} Deposits Inside {riverNameMap[selectedRiverId.toLowerCase()]} ({filteredMinerals.length} Found)</>
@@ -400,7 +400,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
                       </span>
                     </div>
                     <div style={{ fontSize: 11.5, color: "#cbd5e1", marginTop: 5 }}>
-                      Belts: {item.deposits.join(" ? ")}
+                      Belts: {item.deposits.join(" - ")}
                     </div>
                   </div>
                 );
@@ -428,7 +428,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             >
               <Popup>
                 <strong>Selected Map Coordinate</strong><br />
-                Lat: {clickedPin[0]}? N | Lon: {clickedPin[1]}? E
+                Lat: {clickedPin[0]}° N | Lon: {clickedPin[1]}° E
               </Popup>
             </CircleMarker>
           )}
@@ -501,7 +501,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
               </div>
               <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: 13, marginTop: 4 }}>{m.deposit_name}</div>
               <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-                Basin: <strong style={{ color: "#e2e8f0" }}>{riverNameMap[(m.river_id || "").toLowerCase()] || (m.river_id || "").toUpperCase()}</strong> ? {m.grade}
+                Basin: <strong style={{ color: "#e2e8f0" }}>{riverNameMap[(m.river_id || "").toLowerCase()] || (m.river_id || "").toUpperCase()}</strong> - {m.grade}
               </div>
             </div>
           );

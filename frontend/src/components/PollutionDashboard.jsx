@@ -42,7 +42,7 @@ export default function PollutionDashboard({ location, onLocationChange }) {
       const nextLat = Number(location.lat);
       const nextLon = Number(location.lng ?? location.lon);
       if (Math.abs(nextLat - coords.lat) > 0.001 || Math.abs(nextLon - coords.lon) > 0.001) {
-        setCoords({ lat: nextLat, lon: nextLon, name: location.name || `${nextLat.toFixed(3)}?N, ${nextLon.toFixed(3)}?E` });
+        setCoords({ lat: nextLat, lon: nextLon, name: location.name || `${nextLat.toFixed(3)}°N, ${nextLon.toFixed(3)}°E` });
       }
     }
   }, [location?.lat, location?.lng, location?.lon]);
@@ -56,10 +56,10 @@ export default function PollutionDashboard({ location, onLocationChange }) {
         try {
           const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${clat}&lon=${clon}`).then(r => r.json());
           const addr = geoRes?.address || {};
-          resolvedName = addr.city || addr.town || addr.village || addr.county || addr.state_district || `${clat.toFixed(3)}?N, ${clon.toFixed(3)}?E`;
+          resolvedName = addr.city || addr.town || addr.village || addr.county || addr.state_district || `${clat.toFixed(3)}°N, ${clon.toFixed(3)}°E`;
           if (addr.state && !resolvedName.includes(addr.state)) resolvedName += `, ${addr.state}`;
         } catch {
-          resolvedName = `${clat.toFixed(3)}?N, ${clon.toFixed(3)}?E`;
+          resolvedName = `${clat.toFixed(3)}°N, ${clon.toFixed(3)}°E`;
         }
       }
 
@@ -168,7 +168,7 @@ export default function PollutionDashboard({ location, onLocationChange }) {
     const lonNum = Number(Number(clon).toFixed(4));
     setCoords({ lat: latNum, lon: lonNum, name: "" });
     if (typeof onLocationChange === "function") {
-      onLocationChange({ name: `Pin (${latNum}?N, ${lonNum}?E)`, lat: latNum, lng: lonNum });
+      onLocationChange({ name: `Pin (${latNum}°N, ${lonNum}°E)`, lat: latNum, lng: lonNum });
     }
   };
 
@@ -185,22 +185,22 @@ export default function PollutionDashboard({ location, onLocationChange }) {
         <div style={{ background: "#0f172a", border: `1px solid ${cat.color}`, borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>LIVE US AQI</div>
           <div style={{ fontSize: 24, fontWeight: 800, color: cat.color }}>{currentMetrics.aqi}</div>
-          <div style={{ fontSize: 12, color: "#e2e8f0" }}>{cat.label} ? {inspectData?.place_name || coords.name}</div>
+          <div style={{ fontSize: 12, color: "#e2e8f0" }}>{cat.label} - {inspectData?.place_name || coords.name}</div>
         </div>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>PM2.5 & PM10</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#38bdf8" }}>{currentMetrics.pm25} ?g/m?</div>
-          <div style={{ fontSize: 12, color: "#cbd5e1" }}>PM10: {currentMetrics.pm10} ?g/m?</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#38bdf8" }}>{currentMetrics.pm25} µg/m³</div>
+          <div style={{ fontSize: 12, color: "#cbd5e1" }}>PM10: {currentMetrics.pm10} µg/m³</div>
         </div>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>TRACE GASES (NO? / O?)</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#f59e0b" }}>NO?: {currentMetrics.no2} ?g/m?</div>
-          <div style={{ fontSize: 12, color: "#cbd5e1" }}>O?: {currentMetrics.o3} ? SO?: {currentMetrics.so2}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#f59e0b" }}>NO?: {currentMetrics.no2} µg/m³</div>
+          <div style={{ fontSize: 12, color: "#cbd5e1" }}>O?: {currentMetrics.o3} - SO?: {currentMetrics.so2}</div>
         </div>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>PLUME WIND VECTOR</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: "#4ade80" }}>{currentMetrics.windSpeed} km/h</div>
-          <div style={{ fontSize: 12, color: "#cbd5e1" }}>Bearing: {currentMetrics.windDir}? ? RH {currentMetrics.humidity}%</div>
+          <div style={{ fontSize: 12, color: "#cbd5e1" }}>Bearing: {currentMetrics.windDir}° - RH {currentMetrics.humidity}%</div>
         </div>
       </div>
 
@@ -227,7 +227,7 @@ export default function PollutionDashboard({ location, onLocationChange }) {
                 <Popup>
                   <strong>{spot.name}</strong><br />
                   US AQI: <strong>{spot.aqi}</strong> ({sc.label})<br />
-                  PM2.5: {spot.pm25} ?g/m? | PM10: {spot.pm10} ?g/m?<br />
+                  PM2.5: {spot.pm25} µg/m³ | PM10: {spot.pm10} µg/m³<br />
                   Offset: {spot.dist}
                 </Popup>
               </CircleMarker>
@@ -240,7 +240,7 @@ export default function PollutionDashboard({ location, onLocationChange }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12 }}>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 12, padding: 14 }}>
           <div style={{ fontWeight: 700, color: "#38bdf8", fontSize: 14, marginBottom: 4 }}>
-            24-Hour Time-of-Day AQI Curve ? {inspectData?.place_name || coords.name}
+            24-Hour Time-of-Day AQI Curve - {inspectData?.place_name || coords.name}
           </div>
           <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
             Peak Hour: <strong style={{ color: "#f87171" }}>{peakHour ? `${peakHour.hour} (AQI ${peakHour.AQI})` : "--"}</strong> ?
@@ -267,7 +267,7 @@ export default function PollutionDashboard({ location, onLocationChange }) {
             Nearby Pollution Hotspots Around Clicked Location
           </div>
           <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
-            Live upwind/downwind sector readings within 18 km of ({coords.lat}?N, {coords.lon}?E)
+            Live upwind/downwind sector readings within 18 km of ({coords.lat}°N, {coords.lon}°E)
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {nearbyHotspots.map((spot, i) => {
@@ -276,7 +276,7 @@ export default function PollutionDashboard({ location, onLocationChange }) {
                 <div key={i} style={{ background: "#090d16", border: `1px solid ${sc.color}`, borderRadius: 8, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: 13 }}>{spot.name}</div>
-                    <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{spot.dist} ? PM2.5: {spot.pm25} ?g/m? | PM10: {spot.pm10} ?g/m?</div>
+                    <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{spot.dist} - PM2.5: {spot.pm25} µg/m³ | PM10: {spot.pm10} µg/m³</div>
                   </div>
                   <div style={{ fontWeight: 800, color: sc.color, fontSize: 15 }}>
                     AQI {spot.aqi}

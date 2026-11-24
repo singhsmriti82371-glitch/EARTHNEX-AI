@@ -33,7 +33,7 @@ export default function ClimateDashboard({ location, onLocationChange }) {
       const nextLat = Number(location.lat);
       const nextLon = Number(location.lng ?? location.lon);
       if (Math.abs(nextLat - coords.lat) > 0.001 || Math.abs(nextLon - coords.lon) > 0.001) {
-        setCoords({ lat: nextLat, lon: nextLon, name: location.name || `${nextLat.toFixed(3)}?N, ${nextLon.toFixed(3)}?E` });
+        setCoords({ lat: nextLat, lon: nextLon, name: location.name || `${nextLat.toFixed(3)}°N, ${nextLon.toFixed(3)}°E` });
       }
     }
   }, [location?.lat, location?.lng, location?.lon]);
@@ -46,10 +46,10 @@ export default function ClimateDashboard({ location, onLocationChange }) {
         try {
           const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${clat}&lon=${clon}`).then(r => r.json());
           const addr = geoRes?.address || {};
-          resolvedName = addr.city || addr.town || addr.village || addr.county || addr.state_district || `${clat.toFixed(3)}?N, ${clon.toFixed(3)}?E`;
+          resolvedName = addr.city || addr.town || addr.village || addr.county || addr.state_district || `${clat.toFixed(3)}°N, ${clon.toFixed(3)}°E`;
           if (addr.state && !resolvedName.includes(addr.state)) resolvedName += `, ${addr.state}`;
         } catch {
-          resolvedName = `${clat.toFixed(3)}?N, ${clon.toFixed(3)}?E`;
+          resolvedName = `${clat.toFixed(3)}°N, ${clon.toFixed(3)}°E`;
         }
       }
 
@@ -127,7 +127,7 @@ export default function ClimateDashboard({ location, onLocationChange }) {
     const lonNum = Number(Number(clon).toFixed(4));
     setCoords({ lat: latNum, lon: lonNum, name: "" });
     if (typeof onLocationChange === "function") {
-      onLocationChange({ name: `Pin (${latNum}?N, ${lonNum}?E)`, lat: latNum, lng: lonNum });
+      onLocationChange({ name: `Pin (${latNum}°N, ${lonNum}°E)`, lat: latNum, lng: lonNum });
     }
   };
 
@@ -139,22 +139,22 @@ export default function ClimateDashboard({ location, onLocationChange }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
         <div style={{ background: "#0f172a", border: "1px solid #38bdf8", borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>LIVE TEMPERATURE</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#4ade80" }}>{kpis.temp} ?C</div>
-          <div style={{ fontSize: 12, color: "#cbd5e1" }}>RH: {kpis.humidity}% ? Wind: {kpis.wind} km/h</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#4ade80" }}>{kpis.temp} °C</div>
+          <div style={{ fontSize: 12, color: "#cbd5e1" }}>RH: {kpis.humidity}% - Wind: {kpis.wind} km/h</div>
         </div>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>NASA 2035 / 2050 TEMP</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#f97316" }}>{kpis.temp2035} ?C ? {kpis.temp2050} ?C</div>
-          <div style={{ fontSize: 12, color: "#cbd5e1" }}>Slope: +{kpis.slope} ?C/yr</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#f97316" }}>{kpis.temp2035} °C - {kpis.temp2050} °C</div>
+          <div style={{ fontSize: 12, color: "#cbd5e1" }}>Slope: +{kpis.slope} °C/yr</div>
         </div>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>NASA TOPSOIL WETNESS</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#38bdf8" }}>{kpis.soilNow} (0?5 cm)</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#38bdf8" }}>{kpis.soilNow} (0-5 cm)</div>
           <div style={{ fontSize: 12, color: "#cbd5e1" }}>2035 Forecast: {kpis.soil2035}</div>
         </div>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
           <div style={{ fontSize: 11, color: "#94a3b8" }}>SOLAR IRRADIANCE</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#facc15" }}>{kpis.solar} kWh/m?/d</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#facc15" }}>{kpis.solar} kWh/m²/d</div>
           <div style={{ fontSize: 12, color: "#cbd5e1" }}>{inspectData?.place_name || coords.name}</div>
         </div>
       </div>
@@ -172,8 +172,8 @@ export default function ClimateDashboard({ location, onLocationChange }) {
           >
             <Popup>
               <strong>{inspectData?.place_name || coords.name}</strong><br />
-              Live Temp: {kpis.temp} ?C | RH: {kpis.humidity}%<br />
-              NASA 2050 Temp: {kpis.temp2050} ?C
+              Live Temp: {kpis.temp} °C | RH: {kpis.humidity}%<br />
+              NASA 2050 Temp: {kpis.temp2050} °C
             </Popup>
           </CircleMarker>
         </MapContainer>
@@ -183,7 +183,7 @@ export default function ClimateDashboard({ location, onLocationChange }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12 }}>
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 12, padding: 14 }}>
           <div style={{ fontWeight: 700, color: "#38bdf8", fontSize: 14, marginBottom: 8 }}>
-            24-Hour Temperature & Humidity ? {inspectData?.place_name || coords.name}
+            24-Hour Temperature & Humidity - {inspectData?.place_name || coords.name}
           </div>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>
@@ -202,7 +202,7 @@ export default function ClimateDashboard({ location, onLocationChange }) {
 
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 12, padding: 14 }}>
           <div style={{ fontWeight: 700, color: "#f97316", fontSize: 14, marginBottom: 8 }}>
-            NASA POWER Climate Trajectory (2010 ? 2050) ? {inspectData?.place_name || coords.name}
+            NASA POWER Climate Trajectory (2010 - 2050) - {inspectData?.place_name || coords.name}
           </div>
           <div style={{ width: "100%", height: 240 }}>
             <ResponsiveContainer>

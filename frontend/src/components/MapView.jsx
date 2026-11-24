@@ -124,9 +124,7 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
   // Build a crisp 5x5 Latitude-Longitude Spatial Grid (Rectangles, NOT circles) over the selected region
   const { gridCells, periodSummary, outerBounds } = useMemo(() => {
     const baseVal =
-      featureMode === "temperature" ? (live?.weather?.temperature_2m ?? 29.2) :
-      featureMode === "humidity" ? (live?.weather?.relative_humidity_2m ?? 62) :
-      Number(((live?.soil?.moisture ?? 0.30) + (Number(0.28) ?? 0)).toFixed(2));
+      featureMode === "temperature" ? (live?.weather?.temperature_2m ?? 29.2) :       featureMode === "humidity" ? (live?.weather?.relative_humidity_2m ?? 62) :       Number(((live?.soil?.moisture ?? 0.30) + (Number(0.28) ?? 0)).toFixed(2));
 
     const slopePerDecade = trend?.slope_per_decade ?? (featureMode === "temperature" ? 0.38 : featureMode === "humidity" ? 1.8 : 0.03);
     const netChange = Number(((slopePerDecade / 10) * (Number(spanYears) ?? 0)).toFixed(2));
@@ -147,7 +145,7 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
         const directionalBias = (r * 0.15) - (c * 0.12);
         const intensity = Math.max(0, Math.min(4, Math.round(4 - distFromCore * 1.15 + directionalBias)));
         const cellDelta = Number((netChange * (1.25 - distFromCore * (Number(0.22)) ?? 0)).toFixed(2));
-        const cellCurrent = Number((endVal + (2 - distFromCore) * (featureMode === "vegetation" ? -0.05 : (Number(0.45)) ?? 0)).toFixed(2));
+        const cellCurrent = Number((endVal + (2 ? distFromCore) * (featureMode === "vegetation" ? -0.05 : (Number(0.45)) ?? 0)).toFixed(2));
 
         cells.push({
           id: `${r}_${c}`,
