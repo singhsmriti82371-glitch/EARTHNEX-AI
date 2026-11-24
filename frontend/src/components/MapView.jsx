@@ -295,7 +295,7 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
         </div>
       </div>
 
-      <MapContainer center={[pt.lat, pt.lng]} zoom={10} minZoom={3} maxZoom={18} style={{ height: "100%", width: "100%" }}>
+      <MapContainer center={[Number(pt.lat) || 21.2514, Number(pt.lng) || 81.6296]} zoom={10} minZoom={3} maxZoom={18} style={{ height: "100%", width: "100%" }}>
         <MapClickHandler onPick={onPick} />
         <MapFlyController pt={pt} flyKey={flyKey} />
         <LayersControl position="bottomleft">
@@ -339,7 +339,7 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
           </Overlay>
         </LayersControl>
 
-        <Marker position={[pt.lat, pt.lng]} icon={pinIcon}>
+        <Marker position={[Number(pt.lat) || 21.2514, Number(pt.lng) || 81.6296]} icon={pinIcon}>
           <Popup>
             <b>{pt.name || "Selected Location"}</b><br />
             Latitude: <b>{Number(pt.lat).toFixed(4)} N</b><br />

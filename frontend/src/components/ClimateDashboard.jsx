@@ -359,7 +359,7 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
         <div style={{ flex: 1, position: "relative" }}>
           
           <LiveInspectBanner inspectData={inspectData} loading={inspectLoading} onClose={() => setInspectData(null)} />
-          <MapContainer center={[loc.lat, loc.lng]} zoom={10} minZoom={3} maxZoom={18} style={{ height: "100%", width: "100%" }}>
+          <MapContainer center={[Number(loc.lat) || 21.2514, Number(loc.lng) || 81.6296]} zoom={10} minZoom={3} maxZoom={18} style={{ height: "100%", width: "100%" }}>
             <ClickHandler onSelect={setLoc} />
             <FlyController loc={loc} />
             <LayersControl position="bottomleft">
@@ -384,7 +384,7 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
               </Overlay>
             </LayersControl>
 
-            <Marker position={[loc.lat, loc.lng]} icon={pinIcon}>
+            <Marker position={[Number(loc.lat) || 21.2514, Number(loc.lng) || 81.6296]} icon={pinIcon}>
               <Popup>
                 <b>{loc.name}</b><br />
                 Lat: {(Number(loc.lat ?? 0)).toFixed(4)} N | Lon: {(Number(loc.lng ?? 0)).toFixed(4)} E<br />

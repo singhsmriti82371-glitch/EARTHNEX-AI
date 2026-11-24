@@ -132,8 +132,9 @@ export default function RiverMineralDashboard({ onLocationChange }) {
       const path = RIVER_PATHS[visibleRivers[0].id.toLowerCase()];
       if (path && path.length > 0) return { coords: path[Math.floor(path.length / 2)], zoom: 6 };
     }
-    if (selectedMineralType && visibleMinerals.length > 0) {
-      return { coords: [visibleMinerals[0].lat, visibleMinerals[0].lon], zoom: 6 };
+    if (selectedMineralType && visibleMinerals.some(m => Number.isFinite(Number(m?.lat)) && Number.isFinite(Number(m?.lon)))) {
+      const firstValid = visibleMinerals.find(m => Number.isFinite(Number(m?.lat)) && Number.isFinite(Number(m?.lon)));
+      return { coords: [Number(firstValid.lat), Number(firstValid.lon)], zoom: 6 };
     }
     return { coords: [22.35, 81.5], zoom: 5 };
   }, [selectedRiverId, selectedMineralType, visibleRivers, visibleMinerals]);
@@ -314,12 +315,12 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             );
           })}
 
-          {visibleMinerals.map((m, idx) => {
+          {visibleMinerals.filter(m => m && m.lat != null && m.lon != null && Number.isFinite(Number(m.lat)) && Number.isFinite(Number(m.lon))).map((m, idx) => {
             const pinColor = getMineralColor(m.mineral);
             return (
               <CircleMarker
                 key={`${m.deposit_name}-${idx}`}
-                center={[m.lat, m.lon]}
+                center={[Number(m.lat), Number(m.lon)]}
                 radius={8}
                 pathOptions={{
                   color: "#ffffff",

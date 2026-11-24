@@ -178,7 +178,7 @@ export default function RiverMineralPage() {
       </div>
 
       <div style={{ position: "relative", height: "54vh", minHeight: 360, width: "100%", borderBottom: "1px solid #1e293b" }}>
-        <MapContainer center={[22.2, 81.5]} zoom={5} minZoom={4} maxZoom={16} style={{ height: "100%", width: "100%" }}>
+        <MapContainer center={[Number(22.2) || 21.2514, Number(81.5) || 81.6296]} zoom={5} minZoom={4} maxZoom={16} style={{ height: "100%", width: "100%" }}>
           <TileLayer maxZoom={18} attribution="&copy; OpenStreetMap" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
           {INDIA_RIVERS.map((river) => {
@@ -209,7 +209,7 @@ export default function RiverMineralPage() {
               .map((z, idx) => (
                 <CircleMarker
                   key={`${river.id}-zone-${idx}`}
-                  center={[z.lat, z.lon]}
+                  center={[Number(z.lat) || 21.2514, Number(z.lon) || 81.6296]}
                   radius={9}
                   pathOptions={{
                     color: "#ffffff",
