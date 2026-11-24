@@ -1,23 +1,51 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Popup, useMap } from "react-leaflet";
 import { MapClickListener, LiveInspectBanner } from "./MapClickInspector";
+
+const DEFAULT_RIVERS = [
+  { id: "ganga", name: "Ganga River Basin", states: "Uttarakhand, UP, Bihar, Jharkhand, West Bengal", outlet: "Bay of Bengal", plastic_tons_yr: 115000, microplastic_conc: "420 particles/m?", damage_score: 84, damage_level: "Critical", water_impact: "High urban sewage, industrial effluent, and macro/microplastic transport into the Sundarbans delta." },
+  { id: "yamuna", name: "Yamuna River Basin", states: "Uttarakhand, Himachal, Haryana, Delhi, UP", outlet: "Ganga (Prayagraj)", plastic_tons_yr: 48500, microplastic_conc: "510 particles/m?", damage_score: 88, damage_level: "Severe", water_impact: "Severe dissolved oxygen depletion and industrial chemical foam across the Delhi?Agra stretch." },
+  { id: "brahmaputra", name: "Brahmaputra River Basin", states: "Arunachal Pradesh, Assam, Meghalaya", outlet: "Bay of Bengal", plastic_tons_yr: 34200, microplastic_conc: "190 particles/m?", damage_score: 56, damage_level: "Moderate", water_impact: "Monsoon siltation and flood-driven plastic runoff across Assam valley wetlands." },
+  { id: "mahanadi", name: "Mahanadi River Basin", states: "Chhattisgarh, Odisha", outlet: "Bay of Bengal", plastic_tons_yr: 29400, microplastic_conc: "235 particles/m?", damage_score: 64, damage_level: "Elevated", water_impact: "Mining runoff, thermal ash, and municipal waste along Raipur?Cuttack corridor." },
+  { id: "godavari", name: "Godavari River Basin", states: "Maharashtra, Telangana, Chhattisgarh, Andhra Pradesh", outlet: "Bay of Bengal", plastic_tons_yr: 38900, microplastic_conc: "260 particles/m?", damage_score: 68, damage_level: "Elevated", water_impact: "Agricultural fertilizer runoff and industrial discharge near Nashik and Rajahmundry." },
+  { id: "krishna", name: "Krishna River Basin", states: "Maharashtra, Karnataka, Telangana, Andhra Pradesh", outlet: "Bay of Bengal", plastic_tons_yr: 31800, microplastic_conc: "245 particles/m?", damage_score: 65, damage_level: "Elevated", water_impact: "Reservoir trapping of microplastics and urban discharge from Pune and Vijayawada." },
+  { id: "narmada", name: "Narmada River Basin", states: "Madhya Pradesh, Maharashtra, Gujarat", outlet: "Arabian Sea", plastic_tons_yr: 18600, microplastic_conc: "155 particles/m?", damage_score: 49, damage_level: "Moderate", water_impact: "Relatively lower industrial plastic load with localized estuarine accumulation at Bharuch." },
+  { id: "cauvery", name: "Cauvery River Basin", states: "Karnataka, Tamil Nadu, Kerala, Puducherry", outlet: "Bay of Bengal", plastic_tons_yr: 24100, microplastic_conc: "275 particles/m?", damage_score: 69, damage_level: "Elevated", water_impact: "Textile dyeing effluents and dense agricultural abstraction in the delta." }
+];
+
+const DEFAULT_MINERALS = [
+  { river_id: "mahanadi", mineral: "Iron Ore", deposit_name: "Bailadila & Dalli-Rajhara Belt (Chhattisgarh)", lat: 18.6298, lon: 81.2000, grade: "High-Grade Hematite (65% Fe)" },
+  { river_id: "mahanadi", mineral: "Iron Ore", deposit_name: "Keonjhar-Sundargarh Belt (Odisha)", lat: 21.8245, lon: 85.6185, grade: "62-65% Fe Hematite" },
+  { river_id: "godavari", mineral: "Iron Ore", deposit_name: "Bellary-Hospet Iron Belt (Karnataka)", lat: 15.1394, lon: 76.9214, grade: "64% Fe" },
+  { river_id: "mahanadi", mineral: "Coal", deposit_name: "Korba & Talcher Coalfields", lat: 22.3595, lon: 82.7501, grade: "Thermal Grade G4-G6" },
+  { river_id: "ganga", mineral: "Coal", deposit_name: "Jharia & Raniganj Coalfields (Jharkhand-WB)", lat: 23.7407, lon: 86.4146, grade: "Prime Coking Coal" },
+  { river_id: "godavari", mineral: "Coal", deposit_name: "Singareni Collieries (Telangana)", lat: 17.5082, lon: 80.2735, grade: "Non-Coking Bituminous" },
+  { river_id: "mahanadi", mineral: "Bauxite", deposit_name: "Panchpatmali & Koraput Plateau (Odisha)", lat: 18.8561, lon: 82.9125, grade: "46% Al2O3 Metallurgical" },
+  { river_id: "narmada", mineral: "Bauxite", deposit_name: "Amarkantak-Maikal Hills (MP/CG)", lat: 22.6749, lon: 81.7591, grade: "45% Al2O3" },
+  { river_id: "godavari", mineral: "Manganese", deposit_name: "Balaghat-Nagpur Manganese Belt", lat: 21.8129, lon: 80.1838, grade: "48% Mn High-Grade" },
+  { river_id: "krishna", mineral: "Gold", deposit_name: "Hutti & Kolar Gold Fields (Karnataka)", lat: 16.1972, lon: 76.6625, grade: "4.5 g/t Au" },
+  { river_id: "ganga", mineral: "Uranium", deposit_name: "Jaduguda Uranium Mines (Singhbhum)", lat: 22.6519, lon: 86.3536, grade: "0.065% U3O8" },
+  { river_id: "mahanadi", mineral: "Limestone", deposit_name: "Baloda Bazar-Raipur Cement Belt", lat: 21.6569, lon: 82.1592, grade: "Cement Grade CaO 48%" },
+  { river_id: "narmada", mineral: "Copper", deposit_name: "Malanjkhand Copper Deposit (MP)", lat: 22.0225, lon: 80.7136, grade: "1.2% Cu Porphyry" },
+  { river_id: "brahmaputra", mineral: "Coal", deposit_name: "Makum-Margherita Coalfield (Assam)", lat: 27.2845, lon: 95.6681, grade: "Low-Ash Tertiary Coal" }
+];
 
 const MINERAL_COLORS = {
   "Iron Ore": "#ef4444",
   "Coal": "#f59e0b",
-  "Bauxite": "#38bdf8",
-  "Manganese": "#a855f7",
-  "Gold": "#facc15",
-  "Uranium": "#22c55e",
-  "Limestone": "#ec4899",
-  "Copper": "#fb923c"
+  "Bauxite": "#0284c7",
+  "Manganese": "#9333ea",
+  "Gold": "#eab308",
+  "Uranium": "#16a34a",
+  "Limestone": "#db2777",
+  "Copper": "#ea580c"
 };
 
 function getMineralColor(mineralName = "") {
   const key = Object.keys(MINERAL_COLORS).find(k =>
     mineralName.toLowerCase().includes(k.toLowerCase())
   );
-  return key ? MINERAL_COLORS[key] : "#14b8a6";
+  return key ? MINERAL_COLORS[key] : "#0d9488";
 }
 
 const RIVER_PATHS = {
@@ -34,7 +62,7 @@ const RIVER_PATHS = {
 function MapAutoFocus({ targetCoords, zoom }) {
   const map = useMap();
   useEffect(() => {
-    if (targetCoords && targetCoords.length === 2) {
+    if (targetCoords && targetCoords.length === 2 && Number.isFinite(targetCoords[0]) && Number.isFinite(targetCoords[1])) {
       map.flyTo(targetCoords, zoom || 5, { duration: 1.0 });
     }
   }, [targetCoords, zoom, map]);
@@ -42,44 +70,57 @@ function MapAutoFocus({ targetCoords, zoom }) {
 }
 
 export default function RiverMineralDashboard({ onLocationChange }) {
-  const [rivers, setRivers] = useState([]);
-  const [minerals, setMinerals] = useState([]);
+  const [rivers, setRivers] = useState(DEFAULT_RIVERS);
+  const [minerals, setMinerals] = useState(DEFAULT_MINERALS);
   const [searchText, setSearchText] = useState("");
   const [selectedRiverId, setSelectedRiverId] = useState("");
   const [selectedMineralType, setSelectedMineralType] = useState("");
+  const [clickedPin, setClickedPin] = useState(null);
   const [inspectData, setInspectData] = useState(null);
   const [inspectLoading, setInspectLoading] = useState(false);
 
   useEffect(() => {
     fetch(`${window.location.origin}/api/rivers`)
       .then(r => r.json())
-      .then(d => setRivers(Array.isArray(d) ? d : (d.rivers || [])))
+      .then(d => {
+        const list = Array.isArray(d) ? d : (d.rivers || []);
+        if (list.length > 0) setRivers(list);
+      })
       .catch(() => {});
 
     fetch(`${window.location.origin}/api/minerals`)
       .then(r => r.json())
-      .then(d => setMinerals(Array.isArray(d) ? d : (d.minerals || [])))
+      .then(d => {
+        const list = Array.isArray(d) ? d : (d.minerals || []);
+        if (list.length > 0) setMinerals(list);
+      })
       .catch(() => {});
   }, []);
 
   const handleMapClick = async (clat, clon) => {
+    const latNum = Number(Number(clat).toFixed(4));
+    const lonNum = Number(Number(clon).toFixed(4));
+    setClickedPin([latNum, lonNum]);
     setInspectLoading(true);
     setInspectData({
-      place_name: `Coordinates (${Number(clat).toFixed(3)} N, ${Number(clon).toFixed(3)} E)`,
-      lat: Number(clat.toFixed(4)),
-      lon: Number(clon.toFixed(4)),
+      place_name: `Clicked Position (${latNum}? N, ${lonNum}? E)`,
+      lat: latNum,
+      lon: lonNum,
       weather: {},
       air_quality: {}
     });
+    if (typeof onLocationChange === "function") {
+      onLocationChange({ name: `Pin (${latNum}?N, ${lonNum}?E)`, lat: latNum, lng: lonNum });
+    }
     try {
-      const res = await fetch(`${window.location.origin}/api/map-inspect?lat=${clat}&lon=${clon}`);
+      const res = await fetch(`${window.location.origin}/api/map-inspect?lat=${latNum}&lon=${lonNum}`);
       const data = await res.json();
       setInspectData(data);
-      if (onLocationChange && data?.lat && data?.lon) {
-        onLocationChange({ name: data.place_name || "Clicked Pin", lat: data.lat, lng: data.lon });
+      if (typeof onLocationChange === "function" && data?.place_name) {
+        onLocationChange({ name: data.place_name, lat: latNum, lng: lonNum });
       }
     } catch {
-      // keep coordinate banner active so client-side Open-Meteo still loads
+      // keep live client Open-Meteo telemetry banner active
     } finally {
       setInspectLoading(false);
     }
@@ -90,7 +131,6 @@ export default function RiverMineralDashboard({ onLocationChange }) {
     return Array.from(set);
   }, [minerals]);
 
-  // Show ALL rivers by default; filter if a river or search query is selected
   const visibleRivers = useMemo(() => {
     const q = searchText.trim().toLowerCase();
     if (selectedRiverId) {
@@ -107,7 +147,6 @@ export default function RiverMineralDashboard({ onLocationChange }) {
     return rivers;
   }, [rivers, selectedRiverId, searchText]);
 
-  // Show ALL minerals by default; filter if mineral type, river, or search query is active
   const visibleMinerals = useMemo(() => {
     const q = searchText.trim().toLowerCase();
     if (selectedMineralType) {
@@ -132,9 +171,9 @@ export default function RiverMineralDashboard({ onLocationChange }) {
       const path = RIVER_PATHS[visibleRivers[0].id.toLowerCase()];
       if (path && path.length > 0) return { coords: path[Math.floor(path.length / 2)], zoom: 6 };
     }
-    if (selectedMineralType && visibleMinerals.some(m => Number.isFinite(Number(m?.lat)) && Number.isFinite(Number(m?.lon)))) {
+    if (selectedMineralType) {
       const firstValid = visibleMinerals.find(m => Number.isFinite(Number(m?.lat)) && Number.isFinite(Number(m?.lon)));
-      return { coords: [Number(firstValid.lat), Number(firstValid.lon)], zoom: 6 };
+      if (firstValid) return { coords: [Number(firstValid.lat), Number(firstValid.lon)], zoom: 6 };
     }
     return { coords: [22.35, 81.5], zoom: 5 };
   }, [selectedRiverId, selectedMineralType, visibleRivers, visibleMinerals]);
@@ -145,14 +184,14 @@ export default function RiverMineralDashboard({ onLocationChange }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <LiveInspectBanner inspectData={inspectData} loading={inspectLoading} onClose={() => setInspectData(null)} />
 
-      {/* Search & Filter Control Bar */}
+      {/* River Basin & Mineral Deposit Selector Bar */}
       <div style={{
         background: "#0f172a",
         border: "1px solid #1e293b",
         borderRadius: 12,
         padding: 12,
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
         gap: 10,
         alignItems: "center"
       }}>
@@ -164,7 +203,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             setSelectedRiverId("");
             setSelectedMineralType("");
           }}
-          placeholder="Filter river (Ganga, Mahanadi) or mineral (Iron Ore, Coal)..."
+          placeholder="Search river (Ganga, Mahanadi) or mineral (Iron Ore, Coal)..."
           style={{
             background: "#090d16",
             border: "1px solid #334155",
@@ -237,12 +276,12 @@ export default function RiverMineralDashboard({ onLocationChange }) {
               fontSize: 13
             }}
           >
-            Show All Rivers & Minerals
+            Reset Filter (Show All)
           </button>
         )}
       </div>
 
-      {/* Color-Coded Mineral Legend */}
+      {/* Interactive Color-Coded Mineral Chips (Iron Ore, Coal, Bauxite, Gold, etc.) */}
       <div style={{
         display: "flex",
         flexWrap: "wrap",
@@ -254,7 +293,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
         padding: "8px 12px",
         fontSize: 12
       }}>
-        <span style={{ color: "#94a3b8", fontWeight: 600 }}>Mineral Color Legend:</span>
+        <span style={{ color: "#94a3b8", fontWeight: 600 }}>Select Mineral Type:</span>
         {Object.entries(MINERAL_COLORS).map(([name, color]) => {
           const isSelected = selectedMineralType.toLowerCase() === name.toLowerCase();
           return (
@@ -273,9 +312,10 @@ export default function RiverMineralDashboard({ onLocationChange }) {
                 border: `1px solid ${isSelected ? color : "#334155"}`,
                 color: "#e2e8f0",
                 borderRadius: 999,
-                padding: "3px 10px",
+                padding: "4px 11px",
                 cursor: "pointer",
-                fontSize: 11.5
+                fontWeight: isSelected ? 700 : 500,
+                fontSize: 12
               }}
             >
               <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
@@ -285,70 +325,104 @@ export default function RiverMineralDashboard({ onLocationChange }) {
         })}
       </div>
 
-      {/* Full Interactive River & Mineral Map */}
+      {/* Real OpenStreetMap Interactive River & Mineral Map */}
       <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
         <MapContainer center={[22.35, 81.5]} zoom={5} style={{ height: 430, width: "100%" }}>
           <TileLayer
             url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap &copy; CARTO"
+            attribution="&copy; OpenStreetMap contributors"
           />
           <MapClickListener onMapClick={handleMapClick} />
           <MapAutoFocus targetCoords={focusView.coords} zoom={focusView.zoom} />
 
+          {clickedPin && (
+            <CircleMarker
+              center={clickedPin}
+              radius={10}
+              pathOptions={{ color: "#0f172a", weight: 2, fillColor: "#38bdf8", fillOpacity: 0.95 }}
+            >
+              <Popup>
+                <strong>Selected Map Coordinate</strong><br />
+                Lat: {clickedPin[0]}? N | Lon: {clickedPin[1]}? E
+              </Popup>
+            </CircleMarker>
+          )}
+
           {visibleRivers.map(r => {
             const coords = RIVER_PATHS[r.id.toLowerCase()];
             if (!coords) return null;
-            const riverColor = r.damage_score > 75 ? "#ef4444" : r.damage_score > 60 ? "#f59e0b" : "#38bdf8";
+            const riverColor = r.damage_score > 75 ? "#dc2626" : r.damage_score > 60 ? "#d97706" : "#0284c7";
             return (
               <Polyline
                 key={r.id}
                 positions={coords}
-                pathOptions={{ color: riverColor, weight: 4.5, opacity: 0.9 }}
+                pathOptions={{ color: riverColor, weight: 5, opacity: 0.92 }}
               >
                 <Popup>
                   <strong>{r.name}</strong><br />
                   States: {r.states}<br />
-                  Plastic Load: {r.plastic_tons_yr?.toLocaleString()} Tons/yr<br />
+                  Plastic Load: {Number(r.plastic_tons_yr || 0).toLocaleString()} Tons/yr<br />
                   Ecological Damage: {r.damage_score}% ({r.damage_level})
                 </Popup>
               </Polyline>
             );
           })}
 
-          {visibleMinerals.filter(m => m && m.lat != null && m.lon != null && Number.isFinite(Number(m.lat)) && Number.isFinite(Number(m.lon))).map((m, idx) => {
-            const pinColor = getMineralColor(m.mineral);
-            return (
-              <CircleMarker
-                key={`${m.deposit_name}-${idx}`}
-                center={[Number(m.lat), Number(m.lon)]}
-                radius={8}
-                pathOptions={{
-                  color: "#ffffff",
-                  weight: 1.5,
-                  fillColor: pinColor,
-                  fillOpacity: 0.9
-                }}
-              >
-                <Popup>
-                  <strong style={{ color: pinColor }}>{m.mineral}</strong><br />
-                  Deposit: {m.deposit_name}<br />
-                  Grade: {m.grade}<br />
-                  River Basin: {(m.river_id || "").toUpperCase()}
-                </Popup>
-              </CircleMarker>
-            );
-          })}
+          {visibleMinerals
+            .filter(m => m && m.lat != null && m.lon != null && Number.isFinite(Number(m.lat)) && Number.isFinite(Number(m.lon)))
+            .map((m, idx) => {
+              const pinColor = getMineralColor(m.mineral);
+              return (
+                <CircleMarker
+                  key={`${m.deposit_name}-${idx}`}
+                  center={[Number(m.lat), Number(m.lon)]}
+                  radius={9}
+                  pathOptions={{
+                    color: "#0f172a",
+                    weight: 2,
+                    fillColor: pinColor,
+                    fillOpacity: 0.95
+                  }}
+                >
+                  <Popup>
+                    <strong style={{ color: pinColor }}>{m.mineral}</strong><br />
+                    Deposit: {m.deposit_name}<br />
+                    Grade: {m.grade}<br />
+                    River Basin: {(m.river_id || "").toUpperCase()} ({Number(m.lat).toFixed(2)}?N, {Number(m.lon).toFixed(2)}?E)
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
         </MapContainer>
       </div>
 
-      {/* River & Mineral Summary Cards */}
+      {/* Selected Mineral Deposits Highlight Cards */}
+      {selectedMineralType && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+          {visibleMinerals.map((m, idx) => {
+            const badgeColor = getMineralColor(m.mineral);
+            return (
+              <div key={`${m.deposit_name}-card-${idx}`} style={{ background: "#0f172a", border: `1px solid ${badgeColor}`, borderRadius: 10, padding: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: badgeColor }} />
+                  <strong style={{ color: badgeColor, fontSize: 14 }}>{m.mineral}</strong>
+                </div>
+                <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: 13, marginTop: 4 }}>{m.deposit_name}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8" }}>Grade: {m.grade} ? Basin: {(m.river_id || "").toUpperCase()}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* River Basin Telemetry Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 10 }}>
         {visibleRivers.map(r => (
           <div key={r.id} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
             <div style={{ fontWeight: 700, color: "#38bdf8", fontSize: 15 }}>{r.name}</div>
             <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>{r.states} ? Outlet: {r.outlet}</div>
             <div style={{ fontSize: 13, color: "#e2e8f0" }}>
-              Plastic: <strong>{r.plastic_tons_yr?.toLocaleString()} Tons/yr</strong> ? Damage: <strong>{r.damage_score}%</strong> ({r.damage_level})
+              Plastic: <strong>{Number(r.plastic_tons_yr || 0).toLocaleString()} Tons/yr</strong> ? Damage: <strong>{r.damage_score}%</strong> ({r.damage_level})
             </div>
             <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 4 }}>{r.water_impact}</div>
           </div>
