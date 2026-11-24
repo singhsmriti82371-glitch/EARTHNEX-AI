@@ -197,14 +197,23 @@ class AgentQueryPayload(BaseModel):
     api_key: str = ""
     history: list = []
 
-def call_real_gemini(prompt: str, api_key: str):
+def call_real_gemini(prompt: str, api_key: str, history: list = None):
     key = (api_key or os.getenv("GEMINI_API_KEY") or "").strip()
     if not key:
         return None
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+    contents = []
+    if history:
+        for turn in history[-6:]:
+            role = "user" if turn.get("role") == "user" else "model"
+            txt = str(turn.get("text") or turn.get("content") or "").strip()
+            if txt:
+                contents.append({"role": role, "parts": [{"text": txt}]})
+    contents.append({"role": "user", "parts": [{"text": prompt}]})
+
     body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 950}
+        "contents": contents,
+        "generationConfig": {"temperature": 0.25, "maxOutputTokens": 1100}
     }).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=15) as resp:
@@ -215,13 +224,12 @@ def has_word(text: str, word: str) -> bool:
     return bool(re.search(r"\b" + re.escape(word.lower()) + r"\b", text.lower()))
 
 def extract_and_geocode_city(question: str, default_lat: float, default_lon: float, default_name: str):
-    # Match phrases like "in Mumbai", "for New Delhi", "at Kolkata", "of Chennai"
-    m = re.search(r"\b(?:in|for|at|of|near)\s+([A-Z][a-zA-Z\s]{2,28})(?:\?|\.|,|$|\s+(?:today|now|weather|aqi|climate|nasa|soil|temp|temperature|forecast|pollution))", question)
+    m = re.search(r"\b(?:in|for|at|of|near|about)\s+([A-Z][a-zA-Z\s]{2,28})(?:\?|\.|,|$|\s+(?:today|now|weather|aqi|climate|nasa|soil|temp|temperature|forecast|pollution|river|mineral))", question)
     if not m:
         m = re.search(r"\b(?:in|for|at|of|near)\s+([a-zA-Z]{3,22})(?:\?|\.|,|$)", question)
     if m:
         candidate = m.group(1).strip()
-        ignore = {"india", "this", "here", "the", "my", "current", "selected", "location", "database", "river", "ocean", "basin", "2035", "2050", "nasa"}
+        ignore = {"india", "this", "here", "the", "my", "current", "selected", "location", "database", "river", "rivers", "ocean", "oceans", "mineral", "minerals", "basin", "2035", "2050", "nasa", "earth", "plastic", "weather", "climate"}
         if candidate.lower() not in ignore:
             try:
                 q_enc = urllib.parse.quote(candidate)
@@ -232,6 +240,24 @@ def extract_and_geocode_city(question: str, default_lat: float, default_lon: flo
                 pass
     return default_lat, default_lon, default_name
 
+def answer_general_earth_science(ql: str):
+    topics = [
+        (["microplastic", "microplastics", "plastic pollution"],
+         "Microplastics are plastic fragments smaller than 5 mm formed when larger plastic waste breaks down under UV sunlight and river turbulence. In Indian river basins like the Ganga and Yamuna, high-density polyethylene and synthetic fibers bind with heavy metals, enter fish and freshwater food chains, and eventually settle into estuarine sediments in the Bay of Bengal and Arabian Sea."),
+        (["ols", "regression", "linear regression", "how do you predict", "how does prediction work"],
+         "EARTHNEX AI uses Ordinary Least Squares (OLS) linear regression on 21 years (2005-2025) of NASA POWER satellite observations (MERRA-2 and CERES). By fitting a best-fit trend line across annual mean temperature, topsoil wetness (GWETTOP), and precipitation, the model calculates the annual rate of change (slope per year) and projects expected values for 2035 and 2050."),
+        (["soil moisture", "gwettop", "topsoil"],
+         "Surface soil wetness (NASA POWER parameter GWETTOP) measures the water saturation fraction in the top 0-5 cm of soil on a scale from 0 (completely dry) to 1 (fully saturated). Tracking its multi-year slope reveals early drought stress and groundwater recharge trends across agricultural river basins."),
+        (["aqi", "pm2.5", "pm10", "air quality"],
+         "US AQI combines fine particulate matter (PM2.5, particles under 2.5 micrometers that enter the bloodstream through the lungs) and coarse dust/smoke (PM10) into a 0-500 health index. Values under 50 are Good, 51-100 Moderate, 101-150 Unhealthy for Sensitive Groups, and above 150 Unhealthy."),
+        (["bauxite", "iron ore", "coal", "manganese", "uranium", "limestone", "mineral"],
+         "Mineral belts in India are closely tied to ancient geological formations along major river basins?such as iron ore and bauxite in the Mahanadi and Godavari basins, and coal seams across the Damodar and Mahanadi valleys. Mining runoff can alter local river pH and suspended sediment loads if unmanaged.")
+    ]
+    for keys, explanation in topics:
+        if any(k in ql for k in keys):
+            return explanation
+    return None
+
 @app.post("/api/ai-agent")
 def query_earthnex_agent(payload: AgentQueryPayload):
     q = payload.question.strip()
@@ -239,17 +265,32 @@ def query_earthnex_agent(payload: AgentQueryPayload):
     nl = chr(10)
     init_db()
 
-    # 1. Resolve target coordinates (auto-detects city names typed in prompt, else uses active map pin)
+    # 1. Natural greeting / conversational opener
+    if re.fullmatch(r"(hi|hello|hey|namaste|good morning|good evening|who are you|help|what can you do)[!.?\s]*", ql):
+        return {
+            "answer": (
+                f"Hello! I am your EARTHNEX AI Earth science collaborator. Right now, I am tuned to **{payload.location_name}** "
+                f"({payload.lat:.2f}?N, {payload.lon:.2f}?E), and I also have live access to NASA POWER satellite records, "
+                f"Open-Meteo weather and air quality sensors, and India's river basin and mineral deposit database.\n\n"
+                f"You can ask me anything in plain language?for example, what the weather or AQI is in any city, how much plastic "
+                f"flows through rivers like the Ganga or Mahanadi, where specific minerals like iron ore or bauxite are located, "
+                f"or what NASA satellites project for temperature and soil moisture in 2035 and 2050."
+            ),
+            "source": f"EARTHNEX AI Assistant ? Active Pin: {payload.location_name}",
+            "mode": "conversational"
+        }
+
+    # 2. Resolve target coordinates (auto-detects city names typed in prompt, else uses active map pin)
     target_lat, target_lon, target_hint = extract_and_geocode_city(q, payload.lat, payload.lon, payload.location_name)
 
-    # 2. Query Live SQLite Database Tables
+    # 3. Query Live SQLite Database Tables
     conn = get_conn()
     rivers = [dict(r) for r in conn.execute("SELECT id, name, states, outlet, plastic_tons_yr, microplastic_conc, damage_score, damage_level, water_impact FROM rivers ORDER BY plastic_tons_yr DESC").fetchall()]
     minerals = [dict(m) for m in conn.execute("SELECT river_id, mineral, deposit_name, lat, lon, grade FROM mineral_deposits").fetchall()]
     oceans = [dict(o) for o in conn.execute("SELECT id, name, sea_level_trend, sst, wave_height, plastic_inflow, microplastic_density, damage_score, damage_status, damage_summary FROM ocean_basins ORDER BY damage_score DESC").fetchall()]
     conn.close()
 
-    # 3. Fetch Live Weather, Air Quality & NASA POWER Satellite Predictions
+    # 4. Fetch Live Weather, Air Quality & NASA POWER Satellite Predictions
     inspect = map_inspect(lat=target_lat, lon=target_lon)
     place_resolved = inspect.get("place_name") or target_hint
     w = inspect.get("weather", {})
@@ -274,57 +315,56 @@ def query_earthnex_agent(payload: AgentQueryPayload):
     pm25_now = aq.get("pm2_5")
     pm10_now = aq.get("pm10")
 
-    # 4. Build Exact Verified Fact Sheet for Gemini 2.5 Flash (Temperature 0.0 = Strict Grounding)
+    # 5. Build Verified Context for Gemini 2.5 Flash (Natural Human Persona + Strict Grounding)
     rivers_db_text = nl.join([
-        f"- {r['name']} (ID={r['id']}, States={r['states']}, Outlet={r['outlet']}): Plastic={r['plastic_tons_yr']} Tons/yr, Microplastic={r['microplastic_conc']}, Damage={r['damage_score']}% ({r['damage_level']}), Impact='{r['water_impact']}'"
+        f"- {r['name']} (States: {r['states']}, Outlet: {r['outlet']}): {r['plastic_tons_yr']} Tons/yr plastic, Microplastic: {r['microplastic_conc']}, Damage: {r['damage_score']}% ({r['damage_level']}), Impact: {r['water_impact']}"
         for r in rivers
     ])
     minerals_db_text = nl.join([
-        f"- {m['mineral']} at {m['deposit_name']} (RiverBasin={m['river_id']}, Grade={m['grade']}, Lat={m['lat']}, Lon={m['lon']})"
+        f"- {m['mineral']} at {m['deposit_name']} (Basin: {m['river_id']}, Grade: {m['grade']}, Coordinates: {m['lat']} N, {m['lon']} E)"
         for m in minerals
     ])
     oceans_db_text = nl.join([
-        f"- {o['name']}: PlasticInflow={o['plastic_inflow']}, MicroplasticDensity={o['microplastic_density']}, SeaLevelTrend={o['sea_level_trend']}, SST={o['sst']}, WaveHeight={o['wave_height']}, StressScore={o['damage_score']}% ({o['damage_status']})"
+        f"- {o['name']}: Plastic Inflow {o['plastic_inflow']}, Microplastic {o['microplastic_density']}, Sea Level {o['sea_level_trend']}, SST {o['sst']}, Wave Height {o['wave_height']}, Stress {o['damage_score']}% ({o['damage_status']})"
         for o in oceans
     ])
 
-    strict_prompt = f"""You are EARTHNEX AI's Scientific Earth Intelligence Assistant.
-STRICT ACCURACY RULES:
-1. Answer ONLY from the verified live telemetry, NASA POWER satellite data, and SQLite records below. Never guess or fabricate numbers.
-2. When comparing items or computing totals/averages/differences, show exact math using the numbers below.
-3. If an asked entity is missing from the SQLite database, state that clearly and show the closest verified record.
-4. Keep answers clear, concise, well-structured with bullet points, and match the user's language (English/Hindi/Hinglish).
+    human_prompt = f"""You are EARTHNEX AI, an insightful, warm, and highly knowledgeable Earth science and environmental intelligence collaborator.
+HOW TO RESPOND:
+- Speak naturally like a thoughtful human expert?clear, conversational, and directly helpful. Avoid robotic labels like "VERIFIED SQLITE RECORD:" or repetitive boilerplate headers.
+- Answer ANY question the user asks: whether it is about live weather, air quality, NASA satellite projections, river pollution, mineral geology, ocean health, or broader Earth science concepts.
+- Whenever you cite live measurements, forecasts, river figures, or mineral deposits, use the EXACT verified numbers from the telemetry and database context below?never invent or guess statistics.
+- Match the user's language (English, Hindi, or Hinglish) naturally.
 
-ACTIVE LOCATION TELEMETRY ({place_resolved} @ {target_lat:.4f} N, {target_lon:.4f} E):
-- Live Weather (Open-Meteo): Temp = {t_now} C | Humidity = {h_now}% | Wind = {wind_now} km/h
-- Live Air Quality (US AQI): AQI = {aqi_now} ({aqi_status}) | PM2.5 = {pm25_now} ug/m3 | PM10 = {pm10_now} ug/m3
-- NASA POWER Satellite (2005-2025 MERRA-2/CERES):
-  * 2010 Temp = {nt.get('baseline_2010')} C | Latest Temp = {nt.get('latest_annual')} C | Warming Rate = {nt.get('slope_per_year')} C/yr
-  * NASA Predicted 2035 Temp = {nt.get('predicted_2035')} C | NASA Predicted 2050 Temp = {nt.get('predicted_2050')} C
-  * NASA Topsoil Moisture (0-5cm) = {ns.get('latest_topsoil_0_5cm')} (2035 est: {ns.get('predicted_2035')}, 2050 est: {ns.get('predicted_2050')})
-  * NASA Precipitation = {np_rain.get('latest_annual')} mm/day (2035 est: {np_rain.get('predicted_2035')} mm/day)
-  * NASA Solar Irradiance = {nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m2/day
-- Nearest Tracked Mineral: {nearest_min['mineral'] if nearest_min else 'None'} at {nearest_min['deposit'] if nearest_min else 'N/A'} ({nearest_min['distance_km'] if nearest_min else 'N/A'} km away, Grade: {nearest_min['grade'] if nearest_min else 'N/A'})
+LIVE TELEMETRY FOR {place_resolved} ({target_lat:.4f}?N, {target_lon:.4f}?E):
+- Weather right now: {t_now} ?C, {h_now}% humidity, wind {wind_now} km/h
+- Air quality right now: US AQI {aqi_now} ({aqi_status}), PM2.5 {pm25_now} ?g/m?, PM10 {pm10_now} ?g/m?
+- NASA POWER Satellite (2005?2025 MERRA-2/CERES):
+  * Air temperature: {nt.get('baseline_2010')} ?C (2010) -> {nt.get('latest_annual')} ?C (latest) -> {nt.get('predicted_2035')} ?C (2035) -> {nt.get('predicted_2050')} ?C (2050), slope {nt.get('slope_per_year')} ?C/yr
+  * Surface soil wetness (0?5 cm): {ns.get('latest_topsoil_0_5cm')} now, projected {ns.get('predicted_2035')} in 2035 and {ns.get('predicted_2050')} in 2050
+  * Precipitation: {np_rain.get('latest_annual')} mm/day now (2035 projection: {np_rain.get('predicted_2035')} mm/day)
+  * Solar irradiance: {nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m?/day
+- Nearest tracked mineral deposit: {nearest_min['mineral'] if nearest_min else 'None'} at {nearest_min['deposit'] if nearest_min else 'N/A'} ({nearest_min['distance_km'] if nearest_min else 'N/A'} km away, grade: {nearest_min['grade'] if nearest_min else 'N/A'})
 
-VERIFIED SQLITE RIVERS (Sorted Highest to Lowest Plastic Discharge):
+TRACKED INDIAN RIVERS DATABASE:
 {rivers_db_text}
 
-VERIFIED SQLITE MINERALS:
+TRACKED MINERAL DEPOSITS DATABASE:
 {minerals_db_text}
 
-VERIFIED SQLITE OCEANS:
+TRACKED OCEAN BASINS DATABASE:
 {oceans_db_text}
 
-USER QUESTION: {q}"""
+User's question: {q}"""
 
     try:
-        llm_reply = call_real_gemini(strict_prompt, payload.api_key)
+        llm_reply = call_real_gemini(human_prompt, payload.api_key, payload.history)
         if llm_reply:
-            return {"answer": llm_reply.strip(), "source": f"Verified Gemini 2.5 + NASA POWER + SQLite ({place_resolved})", "mode": "llm"}
+            return {"answer": llm_reply.strip(), "source": f"EARTHNEX AI ? {place_resolved} ({target_lat:.2f}?N, {target_lon:.2f}?E)", "mode": "llm"}
     except Exception:
         pass
 
-    # 5. Deterministic High-Precision Fallback Engine (Word-Boundary + Exact Math)
+    # 6. Natural Human-Like Deterministic Engine (When no Gemini API key is configured)
     matched_rivers = []
     for r in rivers:
         r_tokens = [r["id"].lower()] + [w_tok for w_tok in re.findall(r"[a-z]+", r["name"].lower()) if w_tok not in ("river", "basin", "the", "of")]
@@ -343,111 +383,96 @@ USER QUESTION: {q}"""
         if o_name in ql or (has_word(ql, "bengal") and "bengal" in o_name) or (has_word(ql, "arabian") and "arabian" in o_name) or (has_word(ql, "indian ocean") and "indian" in o_name):
             matched_oceans.append(o)
 
-    sections = []
+    paragraphs = []
 
     if len(matched_rivers) >= 2:
         r1, r2 = matched_rivers[0], matched_rivers[1]
         diff_tons = abs(r1["plastic_tons_yr"] - r2["plastic_tons_yr"])
         higher = r1 if r1["plastic_tons_yr"] >= r2["plastic_tons_yr"] else r2
-        sections.append(nl.join([
-            f"**Direct SQLite Comparison: {r1['name']} vs {r2['name']}**",
-            f"- **{r1['name']}:** {r1['plastic_tons_yr']:,} Tons/yr plastic | Damage: **{r1['damage_score']}%** ({r1['damage_level']}) | Outlet: {r1['outlet']}",
-            f"- **{r2['name']}:** {r2['plastic_tons_yr']:,} Tons/yr plastic | Damage: **{r2['damage_score']}%** ({r2['damage_level']}) | Outlet: {r2['outlet']}",
-            f"- **Exact Difference:** **{higher['name']}** discharges **{diff_tons:,} Tons/yr more** plastic."
-        ]))
+        paragraphs.append(
+            f"Comparing the **{r1['name']}** and **{r2['name']}**, **{higher['name']}** carries significantly more plastic waste?discharging **{diff_tons:,} Tons/yr more** than the other.\n\n"
+            f"- **{r1['name']}** ({r1['states']}): **{r1['plastic_tons_yr']:,} Tons/yr** entering the {r1['outlet']}, with an ecological damage score of **{r1['damage_score']}%** ({r1['damage_level']}).\n"
+            f"- **{r2['name']}** ({r2['states']}): **{r2['plastic_tons_yr']:,} Tons/yr** entering the {r2['outlet']}, with an ecological damage score of **{r2['damage_score']}%** ({r2['damage_level']})."
+        )
     elif len(matched_rivers) == 1:
         r = matched_rivers[0]
-        r_mins = [f"{m['mineral']} ({m['deposit_name']}, Grade: {m['grade']})" for m in minerals if m["river_id"] == r["id"]]
-        sections.append(nl.join([
-            f"**{r['name']} ? Verified SQLite Record ({r['states']}):**",
-            f"- **Plastic Discharge:** {r['plastic_tons_yr']:,} Tons/yr ({r['microplastic_conc']}) into **{r['outlet']}**",
-            f"- **Ecological Damage:** {r['damage_score']}% ({r['damage_level']})",
-            f"- **Impact Summary:** {r['water_impact']}",
-            f"- **Basin Minerals:** {', '.join(r_mins) if r_mins else 'None recorded'}"
-        ]))
+        r_mins = [f"{m['mineral']} ({m['deposit_name']}, {m['grade']})" for m in minerals if m["river_id"] == r["id"]]
+        min_sentence = f"Along this basin, key tracked mineral deposits include **{', '.join(r_mins)}**." if r_mins else "There are currently no major mineral belts logged directly inside this basin in our database."
+        paragraphs.append(
+            f"The **{r['name']}** flows across **{r['states']}** and empties into the **{r['outlet']}**. Currently, it discharges roughly **{r['plastic_tons_yr']:,} Tons/yr** of plastic waste (microplastic concentration: **{r['microplastic_conc']}**), giving it an ecological damage score of **{r['damage_score']}%** ({r['damage_level']}). {r['water_impact']} {min_sentence}"
+        )
 
     if matched_minerals:
-        m_lines = nl.join([f"- **{m['mineral']}** at *{m['deposit_name']}* ? Grade: **{m['grade']}**, Basin: `{m['river_id'].upper()}` ({m['lat']}?N, {m['lon']}?E)" for m in matched_minerals])
-        sections.append(nl.join(["**Verified Mineral Deposits (SQLite DB):**", m_lines]))
+        m_lines = nl.join([f"- **{m['mineral']}** at **{m['deposit_name']}** ({m['grade']}) in the `{m['river_id'].upper()}` basin ({m['lat']}?N, {m['lon']}?E)" for m in matched_minerals])
+        paragraphs.append(f"Here are the matching mineral deposits tracked in our geological database:{nl}{m_lines}")
 
     if matched_oceans:
         for o in matched_oceans:
-            sections.append(nl.join([
-                f"**{o['name']} ? Verified Marine Record:**",
-                f"- **Plastic Inflow:** {o['plastic_inflow']} | **Microplastic Density:** {o['microplastic_density']}",
-                f"- **Sea Level Trend:** {o['sea_level_trend']} | **SST:** {o['sst']} | **Wave Height:** {o['wave_height']}",
-                f"- **Marine Stress:** {o['damage_score']}% ({o['damage_status']}) ? {o['damage_summary']}"
-            ]))
+            paragraphs.append(
+                f"In the **{o['name']}**, annual plastic inflow is **{o['plastic_inflow']}** with a microplastic density of **{o['microplastic_density']}**. "
+                f"Sea surface temperatures average **{o['sst']}** with a sea-level rise trend of **{o['sea_level_trend']}** and wave heights around **{o['wave_height']}**, "
+                f"placing its overall marine stress score at **{o['damage_score']}%** ({o['damage_status']}): {o['damage_summary']}"
+            )
 
-    if not sections:
+    if not paragraphs:
         if any(has_word(ql, k) for k in ["highest", "most", "maximum", "worst", "top"]):
             if any(has_word(ql, k) for k in ["ocean", "sea", "marine"]):
                 top_o = oceans[0]
-                sections.append(f"**Highest Marine Stress Basin:** **{top_o['name']}** at **{top_o['damage_score']}%** stress ({top_o['damage_status']}), plastic inflow **{top_o['plastic_inflow']}**.")
+                paragraphs.append(f"The **{top_o['name']}** experiences the highest marine stress in our records at **{top_o['damage_score']}%** ({top_o['damage_status']}), driven by **{top_o['plastic_inflow']}** of plastic inflow and a sea-level trend of **{top_o['sea_level_trend']}**.")
             else:
                 top_n = 3 if has_word(ql, "3") or has_word(ql, "three") else 1
-                top_list = nl.join([f"{i+1}. **{r['name']}** ({r['states']}): **{r['plastic_tons_yr']:,} Tons/yr** | Damage: **{r['damage_score']}%**" for i, r in enumerate(rivers[:top_n])])
-                sections.append(nl.join([f"**Top {top_n} Highest Plastic-Polluted River(s) in DB:**", top_list]))
+                if top_n == 1:
+                    top_r = rivers[0]
+                    paragraphs.append(f"The **{top_r['name']}** ({top_r['states']}) carries the highest plastic pollution load among tracked rivers at **{top_r['plastic_tons_yr']:,} Tons/yr**, resulting in a **{top_r['damage_score']}%** ({top_r['damage_level']}) ecological damage score.")
+                else:
+                    top_list = nl.join([f"{i+1}. **{r['name']}** ({r['states']}) ? **{r['plastic_tons_yr']:,} Tons/yr** ({r['damage_score']}% damage)" for i, r in enumerate(rivers[:3])])
+                    paragraphs.append(f"The three most heavily plastic-burdened rivers in India are:{nl}{top_list}")
 
-        if any(has_word(ql, k) for k in ["lowest", "least", "minimum", "cleanest", "best"]):
+        elif any(has_word(ql, k) for k in ["lowest", "least", "minimum", "cleanest", "best"]):
             low_r = rivers[-1]
-            sections.append(f"**Lowest Plastic Discharge River in DB:** **{low_r['name']}** ({low_r['states']}) at **{low_r['plastic_tons_yr']:,} Tons/yr** with **{low_r['damage_score']}%** ecological damage.")
+            paragraphs.append(f"Among the tracked basins, the **{low_r['name']}** ({low_r['states']}) has the lowest plastic discharge at **{low_r['plastic_tons_yr']:,} Tons/yr**, with an ecological damage score of **{low_r['damage_score']}%** ({low_r['damage_level']}).")
 
-        if any(has_word(ql, k) for k in ["total", "sum", "average", "mean", "how many", "count"]):
+        elif any(has_word(ql, k) for k in ["total", "sum", "average", "mean", "how many", "count"]):
             tot_p = sum(r["plastic_tons_yr"] for r in rivers)
             avg_d = round(sum(r["damage_score"] for r in rivers) / max(len(rivers), 1), 1)
-            sections.append(nl.join([
-                "**SQLite Database Summary Metrics:**",
-                f"- **Tracked Rivers:** {len(rivers)} basins | **Total Plastic Load:** **{tot_p:,} Tons/yr** | **Mean Damage Score:** **{avg_d}%**",
-                f"- **Mineral Deposits:** {len(minerals)} | **Ocean Basins:** {len(oceans)}"
-            ]))
+            paragraphs.append(f"Across all **{len(rivers)} tracked Indian river basins**, total annual plastic discharge reaches **{tot_p:,} Tons/yr**, with an average ecological damage score of **{avg_d}%**. The database also monitors **{len(minerals)} major mineral deposits** and **{len(oceans)} marine basins**.")
 
-        if not sections and any(has_word(ql, k) for k in ["river", "rivers", "plastic", "nadi", "basin"]):
+        elif any(has_word(ql, k) for k in ["river", "rivers", "plastic", "nadi", "basin"]):
             tot_p = sum(r["plastic_tons_yr"] for r in rivers)
-            r_lines = nl.join([f"{i+1}. **{r['name']}**: {r['plastic_tons_yr']:,} Tons/yr | Damage: **{r['damage_score']}%** ({r['damage_level']})" for i, r in enumerate(rivers)])
-            sections.append(nl.join([f"**All Tracked Rivers in SQLite DB (Total: {tot_p:,} Tons/yr):**", r_lines]))
+            r_lines = nl.join([f"- **{r['name']}**: **{r['plastic_tons_yr']:,} Tons/yr** ({r['damage_score']}% {r['damage_level']})" for r in rivers])
+            paragraphs.append(f"We track **{len(rivers)} major Indian river basins** discharging a combined **{tot_p:,} Tons/yr** of plastic:{nl}{r_lines}")
 
-        if not sections and any(has_word(ql, k) for k in ["mineral", "minerals", "ore", "deposit", "mining", "khanij"]):
-            m_lines = nl.join([f"- **{m['mineral']}** ? *{m['deposit_name']}* ({m['grade']}) | Basin: `{m['river_id'].upper()}`" for m in minerals])
-            sections.append(nl.join([f"**All {len(minerals)} Mineral Deposits in SQLite DB:**", m_lines]))
+        elif any(has_word(ql, k) for k in ["mineral", "minerals", "ore", "deposit", "mining", "khanij"]):
+            m_lines = nl.join([f"- **{m['mineral']}** at **{m['deposit_name']}** ({m['grade']}) ? `{m['river_id'].upper()}` basin" for m in minerals])
+            paragraphs.append(f"Here are all **{len(minerals)} geological mineral deposits** mapped across India's river basins:{nl}{m_lines}")
 
-        if not sections and any(has_word(ql, k) for k in ["ocean", "oceans", "sea", "marine", "sst", "level"]):
-            o_lines = nl.join([f"- **{o['name']}**: Inflow **{o['plastic_inflow']}**, SST **{o['sst']}**, Sea Level **{o['sea_level_trend']}**, Stress **{o['damage_score']}%**" for o in oceans])
-            sections.append(nl.join(["**All Tracked Ocean Basins in SQLite DB:**", o_lines]))
+        elif any(has_word(ql, k) for k in ["ocean", "oceans", "sea", "marine", "sst", "level"]):
+            o_lines = nl.join([f"- **{o['name']}**: **{o['plastic_inflow']}** inflow, SST **{o['sst']}**, sea-level trend **{o['sea_level_trend']}** ({o['damage_score']}% stress)" for o in oceans])
+            paragraphs.append(f"Here is the live marine health summary for India's surrounding ocean basins:{nl}{o_lines}")
 
-        if any(has_word(ql, k) for k in ["nasa", "satellite", "soil", "moisture", "solar", "precipitation", "rainfall", "2050", "predict", "prediction"]):
-            sections.append(nl.join([
-                f"**NASA POWER Satellite Analysis & 2035/2050 Prediction ({place_resolved} @ {target_lat:.4f}?N, {target_lon:.4f}?E):**",
-                f"- **Satellite Temp Trajectory:** {nt.get('baseline_2010')} ?C (2010) ? {nt.get('latest_annual')} ?C (Latest) ? **{nt.get('predicted_2035')} ?C (2035)** ? **{nt.get('predicted_2050')} ?C (2050)** (`{nt.get('slope_per_year')} ?C/yr`)",
-                f"- **Topsoil Moisture (0?5 cm):** **{ns.get('latest_topsoil_0_5cm')}** (Latest) ? **{ns.get('predicted_2035')}** (2035) ? **{ns.get('predicted_2050')}** (2050)",
-                f"- **Precipitation & Solar:** **{np_rain.get('latest_annual')} mm/day** (2035 est: {np_rain.get('predicted_2035')} mm/day) | Solar: **{nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m?/day**"
-            ]))
+    # Check general Earth science knowledge questions
+    concept_ans = answer_general_earth_science(ql)
+    if concept_ans and not paragraphs:
+        paragraphs.append(concept_ans)
 
-        if any(has_word(ql, k) for k in ["aqi", "pollution", "air", "pm2", "pm10", "smog", "hawa"]):
-            sections.append(nl.join([
-                f"**Live Air Quality ? {place_resolved} ({target_lat:.4f}?N, {target_lon:.4f}?E):**",
-                f"- **US AQI:** **{aqi_now}** ({aqi_status}) | **PM2.5:** **{pm25_now} ?g/m?** | **PM10:** **{pm10_now} ?g/m?**"
-            ]))
+    # Weather, AQI & NASA Satellite forecast questions
+    if any(has_word(ql, k) for k in ["nasa", "satellite", "soil", "moisture", "solar", "precipitation", "rainfall", "2050", "predict", "prediction", "aqi", "pollution", "air", "pm2", "pm10", "weather", "temperature", "temp", "humidity", "wind", "climate", "forecast", "2035"]):
+        paragraphs.append(
+            f"For **{place_resolved}** ({target_lat:.3f}?N, {target_lon:.3f}?E), current conditions are **{t_now} ?C** with **{h_now}%** humidity and **{wind_now} km/h** winds, while air quality stands at **US AQI {aqi_now} ({aqi_status})** (PM2.5: **{pm25_now} ?g/m?**, PM10: **{pm10_now} ?g/m?**).\n\n"
+            f"Based on **NASA POWER satellite time-series (2005?2025)**, annual mean temperatures are shifting at **{nt.get('slope_per_year')} ?C/yr**?projected to reach **{nt.get('predicted_2035')} ?C by 2035** and **{nt.get('predicted_2050')} ?C by 2050**. Surface soil moisture (0?5 cm) is currently **{ns.get('latest_topsoil_0_5cm')}** (projected **{ns.get('predicted_2035')}** by 2035), rainfall averages **{np_rain.get('latest_annual')} mm/day**, and solar irradiance is **{nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m?/day**."
+        )
 
-        if any(has_word(ql, k) for k in ["weather", "temperature", "temp", "humidity", "wind", "climate", "forecast", "2035", "mausam"]):
-            sections.append(nl.join([
-                f"**Live Weather & NASA Forecast ? {place_resolved} ({target_lat:.4f}?N, {target_lon:.4f}?E):**",
-                f"- **Live Sensor:** Temp **{t_now} ?C**, Humidity **{h_now}%**, Wind **{wind_now} km/h**",
-                f"- **NASA OLS Forecast:** 2035 Temp **{nt.get('predicted_2035')} ?C** | 2050 Temp **{nt.get('predicted_2050')} ?C**"
-            ]))
-
-    if not sections:
-        sections.append(nl.join([
-            f"**Complete Verified Report ? {place_resolved} ({target_lat:.4f}?N, {target_lon:.4f}?E):**",
-            f"- **Live Weather & Air:** **{t_now} ?C** | Humidity **{h_now}%** | US AQI **{aqi_now}** ({aqi_status}) | PM2.5 **{pm25_now} ?g/m?**",
-            f"- **NASA POWER Projections:** 2035 Temp **{nt.get('predicted_2035')} ?C** | 2050 Temp **{nt.get('predicted_2050')} ?C** | Soil Moisture **{ns.get('latest_topsoil_0_5cm')}** | Solar **{nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m?/day**",
-            f"- **Nearest SQLite Mineral:** **{nearest_min['mineral']}** at *{nearest_min['deposit']}* ({nearest_min['distance_km']} km away, Grade: {nearest_min['grade']})"
-        ]))
+    if not paragraphs:
+        paragraphs.append(
+            f"Looking at **{place_resolved}** ({target_lat:.3f}?N, {target_lon:.3f}?E), it is currently **{t_now} ?C** with **{h_now}%** humidity and an air quality index of **US AQI {aqi_now} ({aqi_status})**. "
+            f"NASA satellite projections indicate temperatures reaching **{nt.get('predicted_2035')} ?C by 2035** and **{nt.get('predicted_2050')} ?C by 2050**, with topsoil moisture at **{ns.get('latest_topsoil_0_5cm')}**. "
+            f"The closest tracked geological deposit is **{nearest_min['mineral']}** at **{nearest_min['deposit']}** ({nearest_min['distance_km']} km away, {nearest_min['grade']})."
+        )
 
     return {
-        "answer": (nl + nl).join(sections),
-        "source": f"Verified Telemetry + NASA POWER ? {place_resolved} ({target_lat:.2f}?N, {target_lon:.2f}?E)",
-        "mode": "verified-data"
+        "answer": (nl + nl).join(paragraphs),
+        "source": f"EARTHNEX AI ? {place_resolved} ({target_lat:.2f}?N, {target_lon:.2f}?E)",
+        "mode": "conversational-grounded"
     }
 
 dist_path = Path(__file__).resolve().parent.parent / "frontend" / "dist"
