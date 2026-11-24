@@ -1,0 +1,127 @@
+EARTHNEX AI
+
+Track Extras – Hack-A-Sol 5.0
+
+Project Name: EARTHNEX AI
+Team Name: EARTHNEX AI
+Project Category: Sustainability / Earth System Intelligence
+Event: Hack-A-Sol 5.0 – IIIT Naya Raipur
+
+---
+
+1. DATASET SOURCES & REFERENCES
+
+EARTHNEX AI is designed to bring together Earth observation and environmental information from publicly available scientific data resources.
+
+Primary Data Sources:
+
+1. NASA Earthdata
+   
+   - Earth observation and satellite-based scientific datasets.
+   - Environmental and climate-related data discovery.
+   - Reference: https://earthdata.nasa.gov/
+
+2. NASA Open APIs
+   
+   - Publicly accessible NASA data services and API documentation.
+   - Reference: https://api.nasa.gov/
+
+3. NASA Earth Science Resources
+   
+   - Earth system observations and scientific data resources.
+   - Reference: https://science.nasa.gov/earth-science/
+
+Environmental Data Categories:
+
+- Climate and atmospheric conditions.
+- Temperature and humidity.
+- Land and surface observations.
+- Water resources and hydrological information.
+- Environmental and geographical indicators.
+
+Data Usage Note: These are the project's referenced data ecosystems. Individual datasets and APIs are considered integrated only where an active connection has been implemented and verified in the prototype.
+
+---
+
+2. AI & ANALYTICAL MODEL DETAILS
+
+EARTHNEX AI follows an integrated data-analysis approach to make complex Earth-system information easier to understand.
+
+Proposed Analytical Workflow:
+
+1. Data Acquisition – Collect environmental information from available data sources and APIs.
+2. Data Processing – Organize, clean and prepare available datasets.
+3. Data Integration – Bring relevant environmental variables into a common analytical interface.
+4. Spatial Analysis – Associate available environmental information with geographical locations.
+5. Pattern Identification – Examine variations and relationships between environmental indicators.
+6. Predictive Analysis – Apply forecasting or predictive methods where implemented and supported by available data.
+7. Visualization – Present environmental information through maps, indicators and analytical outputs.
+
+Technology Stack:
+
+- Frontend: Flutter and Dart.
+- Backend: Python.
+- API Framework: FastAPI (where implemented).
+- Data Sources: NASA Earthdata and NASA Open APIs.
+- AI Development Assistance: ChatGPT and Claude.
+
+Model Transparency: EARTHNEX AI is a developing prototype. No unverified model accuracy, training dataset size or prediction performance is claimed. Predictive outputs should be distinguished from live observations and validated before real-world decision-making.
+
+---
+
+3. THREAT MODEL & DATA RELIABILITY
+
+EARTHNEX AI considers the following potential risks:
+
+Potential Threat| Mitigation Approach
+Unavailable external APIs| Error handling and alternative data-source support
+Incomplete datasets| Data availability checks
+Outdated environmental observations| Display available observation dates and timestamps
+Incorrect or inconsistent data| Data validation and preprocessing
+Location inaccuracies| Geographical validation
+Unauthorized access| Appropriate API and backend access controls
+Misinterpretation of predictions| Clearly distinguish observations from estimated outputs
+
+Data Reliability: The platform depends on the availability, accuracy, resolution and update frequency of external scientific data providers. Results should be interpreted with their source and temporal context.
+
+Security Considerations:
+
+- Protect API credentials and avoid exposing private keys.
+- Validate incoming data and API responses.
+- Handle external service failures safely.
+- Avoid presenting unverified environmental information as confirmed facts.
+
+---
+
+4. SMART CONTRACT / BLOCKCHAIN DETAILS
+
+Not Applicable (N/A).
+
+EARTHNEX AI is an environmental intelligence and predictive analytics platform. The current project does not use blockchain-based smart contracts or require contract addresses.
+
+---
+
+5. PROJECT SCOPE & LIMITATIONS
+
+- Data availability depends on external providers and API connectivity.
+- Not all environmental datasets are necessarily integrated into the current prototype.
+- Predictive outputs require appropriate data, model validation and testing.
+- Satellite observations may have different spatial and temporal resolutions.
+- The prototype is intended for environmental information analysis and decision-support exploration, not as a replacement for official scientific or government warnings.
+
+---
+
+6. FUTURE SCOPE
+
+- Integration of additional NASA Earth observation datasets.
+- Improved real-time environmental data access.
+- Advanced machine learning-based environmental forecasting.
+- Cross-domain analysis of climate, land, water and atmospheric conditions.
+- Improved geographical visualization and location-specific insights.
+- More reliable environmental risk identification and decision support.
+
+---
+
+Prepared by: Team EARTHNEX AI
+Hackathon: Hack-A-Sol 5.0
+Institution: IIIT Naya Raipur – Hackathon Venue
