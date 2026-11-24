@@ -186,7 +186,7 @@ def get_pollution_by_coords(lat: float = 21.2514, lon: float = 81.6296, name: st
     return {"name": name, "center": [lat, lon], "zoom": 10, "windDir": f"{wind_deg} deg at {wind_speed} km/h", "destination": f"Downwind ({dest_lat} N, {dest_lon} E)", "zones": zones, "flowPaths": [{"from": [lat, lon], "to": [dest_lat, dest_lon], "label": f"Live Wind Drift ({wind_deg} deg at {wind_speed} km/h)"}, {"from": [zones[1]["lat"], zones[1]["lon"]], "to": [lat, lon], "label": "Sector Inflow Plume"}]}
 
 
-import os, re
+import os, re, urllib.parse
 
 class AgentQueryPayload(BaseModel):
     question: str
@@ -204,7 +204,7 @@ def call_real_gemini(prompt: str, api_key: str):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 900}
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 950}
     }).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(req, timeout=15) as resp:
@@ -214,6 +214,24 @@ def call_real_gemini(prompt: str, api_key: str):
 def has_word(text: str, word: str) -> bool:
     return bool(re.search(r"\b" + re.escape(word.lower()) + r"\b", text.lower()))
 
+def extract_and_geocode_city(question: str, default_lat: float, default_lon: float, default_name: str):
+    # Match phrases like "in Mumbai", "for New Delhi", "at Kolkata", "of Chennai"
+    m = re.search(r"\b(?:in|for|at|of|near)\s+([A-Z][a-zA-Z\s]{2,28})(?:\?|\.|,|$|\s+(?:today|now|weather|aqi|climate|nasa|soil|temp|temperature|forecast|pollution))", question)
+    if not m:
+        m = re.search(r"\b(?:in|for|at|of|near)\s+([a-zA-Z]{3,22})(?:\?|\.|,|$)", question)
+    if m:
+        candidate = m.group(1).strip()
+        ignore = {"india", "this", "here", "the", "my", "current", "selected", "location", "database", "river", "ocean", "basin", "2035", "2050", "nasa"}
+        if candidate.lower() not in ignore:
+            try:
+                q_enc = urllib.parse.quote(candidate)
+                geo = fetch_json(f"https://nominatim.openstreetmap.org/search?format=json&q={q_enc}&limit=1", timeout=4)
+                if isinstance(geo, list) and len(geo) > 0:
+                    return float(geo[0]["lat"]), float(geo[0]["lon"]), geo[0].get("display_name", candidate).split(",")[0]
+            except Exception:
+                pass
+    return default_lat, default_lon, default_name
+
 @app.post("/api/ai-agent")
 def query_earthnex_agent(payload: AgentQueryPayload):
     q = payload.question.strip()
@@ -221,25 +239,32 @@ def query_earthnex_agent(payload: AgentQueryPayload):
     nl = chr(10)
     init_db()
 
-    # 1. Query Live SQLite Database Tables
+    # 1. Resolve target coordinates (auto-detects city names typed in prompt, else uses active map pin)
+    target_lat, target_lon, target_hint = extract_and_geocode_city(q, payload.lat, payload.lon, payload.location_name)
+
+    # 2. Query Live SQLite Database Tables
     conn = get_conn()
     rivers = [dict(r) for r in conn.execute("SELECT id, name, states, outlet, plastic_tons_yr, microplastic_conc, damage_score, damage_level, water_impact FROM rivers ORDER BY plastic_tons_yr DESC").fetchall()]
     minerals = [dict(m) for m in conn.execute("SELECT river_id, mineral, deposit_name, lat, lon, grade FROM mineral_deposits").fetchall()]
     oceans = [dict(o) for o in conn.execute("SELECT id, name, sea_level_trend, sst, wave_height, plastic_inflow, microplastic_density, damage_score, damage_status, damage_summary FROM ocean_basins ORDER BY damage_score DESC").fetchall()]
     conn.close()
 
-    # 2. Fetch Live Weather, Air Quality & 2035 OLS Forecast for Active Coordinates
-    inspect = map_inspect(lat=payload.lat, lon=payload.lon)
-    place_resolved = inspect.get("place_name") or payload.location_name
+    # 3. Fetch Live Weather, Air Quality & NASA POWER Satellite Predictions
+    inspect = map_inspect(lat=target_lat, lon=target_lon)
+    place_resolved = inspect.get("place_name") or target_hint
     w = inspect.get("weather", {})
     aq = inspect.get("air_quality", {})
     nearest_min = inspect.get("nearest_mineral")
 
-    climate_live = {}
+    nasa_data = {}
     try:
-        climate_live = get_climate_realtime(lat=payload.lat, lon=payload.lon, param="temperature")
+        nasa_data = get_nasa_satellite_prediction(lat=target_lat, lon=target_lon)
     except Exception:
-        climate_live = {}
+        nasa_data = {}
+
+    nt = nasa_data.get("temperature_c", {})
+    ns = nasa_data.get("soil_moisture_index", {})
+    np_rain = nasa_data.get("precipitation_mm_day", {})
 
     t_now = w.get("temperature_c")
     h_now = w.get("humidity_pct")
@@ -248,11 +273,8 @@ def query_earthnex_agent(payload: AgentQueryPayload):
     aqi_status = aq.get("status")
     pm25_now = aq.get("pm2_5")
     pm10_now = aq.get("pm10")
-    t_2010 = climate_live.get("past_2010")
-    t_2035 = climate_live.get("forecast_2035")
-    slope_yr = climate_live.get("slope_per_year")
 
-    # 3. Build Exact Verified Fact Sheet for Gemini 2.5 Flash (Temperature 0.0 = Zero Hallucination)
+    # 4. Build Exact Verified Fact Sheet for Gemini 2.5 Flash (Temperature 0.0 = Strict Grounding)
     rivers_db_text = nl.join([
         f"- {r['name']} (ID={r['id']}, States={r['states']}, Outlet={r['outlet']}): Plastic={r['plastic_tons_yr']} Tons/yr, Microplastic={r['microplastic_conc']}, Damage={r['damage_score']}% ({r['damage_level']}), Impact='{r['water_impact']}'"
         for r in rivers
@@ -266,26 +288,31 @@ def query_earthnex_agent(payload: AgentQueryPayload):
         for o in oceans
     ])
 
-    strict_prompt = f"""You are EARTHNEX AI's Scientific Data Verification Engine.
-RULES (STRICT):
-1. Use ONLY the verified numbers and facts listed below. NEVER guess, estimate, or invent external statistics.
-2. Perform arithmetic accurately if the user asks for totals, differences, rankings, or comparisons.
-3. If the user asks about a river, mineral, ocean, or city NOT present in the verified dataset below, explicitly state that it is not in the current EARTHNEX database and provide the closest tracked entity instead.
-4. Reply directly in the user's language (English, Hindi, or Hinglish) with exact units.
+    strict_prompt = f"""You are EARTHNEX AI's Scientific Earth Intelligence Assistant.
+STRICT ACCURACY RULES:
+1. Answer ONLY from the verified live telemetry, NASA POWER satellite data, and SQLite records below. Never guess or fabricate numbers.
+2. When comparing items or computing totals/averages/differences, show exact math using the numbers below.
+3. If an asked entity is missing from the SQLite database, state that clearly and show the closest verified record.
+4. Keep answers clear, concise, well-structured with bullet points, and match the user's language (English/Hindi/Hinglish).
 
-VERIFIED LIVE SENSOR TELEMETRY FOR ACTIVE PIN ({place_resolved} @ {payload.lat:.4f} N, {payload.lon:.4f} E):
-- Current Temperature: {t_now} C | Humidity: {h_now}% | Wind Speed: {wind_now} km/h
-- 2010 Baseline Temp: {t_2010} C | 2035 OLS Forecast Temp: {t_2035} C | Annual Trend: {slope_yr} C/yr
-- Live Air Quality: US AQI = {aqi_now} ({aqi_status}) | PM2.5 = {pm25_now} ug/m3 | PM10 = {pm10_now} ug/m3
-- Nearest Tracked Mineral Deposit: {nearest_min['mineral'] if nearest_min else 'None'} at {nearest_min['deposit'] if nearest_min else 'N/A'} ({nearest_min['distance_km'] if nearest_min else 'N/A'} km away, Grade: {nearest_min['grade'] if nearest_min else 'N/A'})
+ACTIVE LOCATION TELEMETRY ({place_resolved} @ {target_lat:.4f} N, {target_lon:.4f} E):
+- Live Weather (Open-Meteo): Temp = {t_now} C | Humidity = {h_now}% | Wind = {wind_now} km/h
+- Live Air Quality (US AQI): AQI = {aqi_now} ({aqi_status}) | PM2.5 = {pm25_now} ug/m3 | PM10 = {pm10_now} ug/m3
+- NASA POWER Satellite (2005-2025 MERRA-2/CERES):
+  * 2010 Temp = {nt.get('baseline_2010')} C | Latest Temp = {nt.get('latest_annual')} C | Warming Rate = {nt.get('slope_per_year')} C/yr
+  * NASA Predicted 2035 Temp = {nt.get('predicted_2035')} C | NASA Predicted 2050 Temp = {nt.get('predicted_2050')} C
+  * NASA Topsoil Moisture (0-5cm) = {ns.get('latest_topsoil_0_5cm')} (2035 est: {ns.get('predicted_2035')}, 2050 est: {ns.get('predicted_2050')})
+  * NASA Precipitation = {np_rain.get('latest_annual')} mm/day (2035 est: {np_rain.get('predicted_2035')} mm/day)
+  * NASA Solar Irradiance = {nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m2/day
+- Nearest Tracked Mineral: {nearest_min['mineral'] if nearest_min else 'None'} at {nearest_min['deposit'] if nearest_min else 'N/A'} ({nearest_min['distance_km'] if nearest_min else 'N/A'} km away, Grade: {nearest_min['grade'] if nearest_min else 'N/A'})
 
-VERIFIED SQLITE RIVERS TABLE (Sorted Highest to Lowest Plastic Discharge):
+VERIFIED SQLITE RIVERS (Sorted Highest to Lowest Plastic Discharge):
 {rivers_db_text}
 
-VERIFIED SQLITE MINERALS TABLE:
+VERIFIED SQLITE MINERALS:
 {minerals_db_text}
 
-VERIFIED SQLITE OCEANS TABLE:
+VERIFIED SQLITE OCEANS:
 {oceans_db_text}
 
 USER QUESTION: {q}"""
@@ -293,11 +320,11 @@ USER QUESTION: {q}"""
     try:
         llm_reply = call_real_gemini(strict_prompt, payload.api_key)
         if llm_reply:
-            return {"answer": llm_reply.strip(), "source": f"Verified Gemini 2.5 + Live Telemetry ({place_resolved})", "mode": "llm"}
+            return {"answer": llm_reply.strip(), "source": f"Verified Gemini 2.5 + NASA POWER + SQLite ({place_resolved})", "mode": "llm"}
     except Exception:
         pass
 
-    # 4. High-Precision Deterministic Data & Math Engine (Exact Word-Boundary Matching)
+    # 5. Deterministic High-Precision Fallback Engine (Word-Boundary + Exact Math)
     matched_rivers = []
     for r in rivers:
         r_tokens = [r["id"].lower()] + [w_tok for w_tok in re.findall(r"[a-z]+", r["name"].lower()) if w_tok not in ("river", "basin", "the", "of")]
@@ -318,7 +345,6 @@ USER QUESTION: {q}"""
 
     sections = []
 
-    # Direct comparison when 2+ rivers are asked (e.g., "Compare Ganga and Mahanadi")
     if len(matched_rivers) >= 2:
         r1, r2 = matched_rivers[0], matched_rivers[1]
         diff_tons = abs(r1["plastic_tons_yr"] - r2["plastic_tons_yr"])
@@ -327,7 +353,7 @@ USER QUESTION: {q}"""
             f"**Direct SQLite Comparison: {r1['name']} vs {r2['name']}**",
             f"- **{r1['name']}:** {r1['plastic_tons_yr']:,} Tons/yr plastic | Damage: **{r1['damage_score']}%** ({r1['damage_level']}) | Outlet: {r1['outlet']}",
             f"- **{r2['name']}:** {r2['plastic_tons_yr']:,} Tons/yr plastic | Damage: **{r2['damage_score']}%** ({r2['damage_level']}) | Outlet: {r2['outlet']}",
-            f"- **Computed Difference:** **{higher['name']}** discharges **{diff_tons:,} Tons/yr more** plastic."
+            f"- **Exact Difference:** **{higher['name']}** discharges **{diff_tons:,} Tons/yr more** plastic."
         ]))
     elif len(matched_rivers) == 1:
         r = matched_rivers[0]
@@ -335,13 +361,13 @@ USER QUESTION: {q}"""
         sections.append(nl.join([
             f"**{r['name']} ? Verified SQLite Record ({r['states']}):**",
             f"- **Plastic Discharge:** {r['plastic_tons_yr']:,} Tons/yr ({r['microplastic_conc']}) into **{r['outlet']}**",
-            f"- **Ecological Damage Score:** {r['damage_score']}% ({r['damage_level']})",
-            f"- **Water Impact:** {r['water_impact']}",
-            f"- **Tracked Basin Minerals:** {', '.join(r_mins) if r_mins else 'None recorded in SQLite DB'}"
+            f"- **Ecological Damage:** {r['damage_score']}% ({r['damage_level']})",
+            f"- **Impact Summary:** {r['water_impact']}",
+            f"- **Basin Minerals:** {', '.join(r_mins) if r_mins else 'None recorded'}"
         ]))
 
     if matched_minerals:
-        m_lines = nl.join([f"- **{m['mineral']}** at *{m['deposit_name']}* ? Grade: **{m['grade']}**, River Basin: `{m['river_id'].upper()}` ({m['lat']}?N, {m['lon']}?E)" for m in matched_minerals])
+        m_lines = nl.join([f"- **{m['mineral']}** at *{m['deposit_name']}* ? Grade: **{m['grade']}**, Basin: `{m['river_id'].upper()}` ({m['lat']}?N, {m['lon']}?E)" for m in matched_minerals])
         sections.append(nl.join(["**Verified Mineral Deposits (SQLite DB):**", m_lines]))
 
     if matched_oceans:
@@ -353,27 +379,27 @@ USER QUESTION: {q}"""
                 f"- **Marine Stress:** {o['damage_score']}% ({o['damage_status']}) ? {o['damage_summary']}"
             ]))
 
-    # Analytical & Aggregate Queries (Highest, Lowest, Total, Average, All Rivers/Minerals/Oceans/Weather/AQI)
     if not sections:
         if any(has_word(ql, k) for k in ["highest", "most", "maximum", "worst", "top"]):
             if any(has_word(ql, k) for k in ["ocean", "sea", "marine"]):
                 top_o = oceans[0]
-                sections.append(f"**Highest Marine Stress Basin:** **{top_o['name']}** with **{top_o['damage_score']}%** stress ({top_o['damage_status']}), inflow **{top_o['plastic_inflow']}**, and sea-level trend **{top_o['sea_level_trend']}**.")
+                sections.append(f"**Highest Marine Stress Basin:** **{top_o['name']}** at **{top_o['damage_score']}%** stress ({top_o['damage_status']}), plastic inflow **{top_o['plastic_inflow']}**.")
             else:
-                top_r = rivers[0]
-                sections.append(f"**Highest Plastic Discharge River in DB:** **{top_r['name']}** ({top_r['states']}) at **{top_r['plastic_tons_yr']:,} Tons/yr** with **{top_r['damage_score']}%** ecological damage ({top_r['damage_level']}).")
+                top_n = 3 if has_word(ql, "3") or has_word(ql, "three") else 1
+                top_list = nl.join([f"{i+1}. **{r['name']}** ({r['states']}): **{r['plastic_tons_yr']:,} Tons/yr** | Damage: **{r['damage_score']}%**" for i, r in enumerate(rivers[:top_n])])
+                sections.append(nl.join([f"**Top {top_n} Highest Plastic-Polluted River(s) in DB:**", top_list]))
 
         if any(has_word(ql, k) for k in ["lowest", "least", "minimum", "cleanest", "best"]):
             low_r = rivers[-1]
-            sections.append(f"**Lowest Plastic Discharge River in DB:** **{low_r['name']}** ({low_r['states']}) at **{low_r['plastic_tons_yr']:,} Tons/yr** with **{low_r['damage_score']}%** ecological damage ({low_r['damage_level']}).")
+            sections.append(f"**Lowest Plastic Discharge River in DB:** **{low_r['name']}** ({low_r['states']}) at **{low_r['plastic_tons_yr']:,} Tons/yr** with **{low_r['damage_score']}%** ecological damage.")
 
         if any(has_word(ql, k) for k in ["total", "sum", "average", "mean", "how many", "count"]):
             tot_p = sum(r["plastic_tons_yr"] for r in rivers)
             avg_d = round(sum(r["damage_score"] for r in rivers) / max(len(rivers), 1), 1)
             sections.append(nl.join([
-                "**SQLite Database Aggregate Metrics:**",
-                f"- **Tracked Rivers:** {len(rivers)} basins | **Combined Plastic Load:** **{tot_p:,} Tons/yr** | **Average Damage Score:** **{avg_d}%**",
-                f"- **Tracked Mineral Deposits:** {len(minerals)} deposits | **Tracked Ocean Basins:** {len(oceans)} basins"
+                "**SQLite Database Summary Metrics:**",
+                f"- **Tracked Rivers:** {len(rivers)} basins | **Total Plastic Load:** **{tot_p:,} Tons/yr** | **Mean Damage Score:** **{avg_d}%**",
+                f"- **Mineral Deposits:** {len(minerals)} | **Ocean Basins:** {len(oceans)}"
             ]))
 
         if not sections and any(has_word(ql, k) for k in ["river", "rivers", "plastic", "nadi", "basin"]):
@@ -389,32 +415,38 @@ USER QUESTION: {q}"""
             o_lines = nl.join([f"- **{o['name']}**: Inflow **{o['plastic_inflow']}**, SST **{o['sst']}**, Sea Level **{o['sea_level_trend']}**, Stress **{o['damage_score']}%**" for o in oceans])
             sections.append(nl.join(["**All Tracked Ocean Basins in SQLite DB:**", o_lines]))
 
+        if any(has_word(ql, k) for k in ["nasa", "satellite", "soil", "moisture", "solar", "precipitation", "rainfall", "2050", "predict", "prediction"]):
+            sections.append(nl.join([
+                f"**NASA POWER Satellite Analysis & 2035/2050 Prediction ({place_resolved} @ {target_lat:.4f}?N, {target_lon:.4f}?E):**",
+                f"- **Satellite Temp Trajectory:** {nt.get('baseline_2010')} ?C (2010) ? {nt.get('latest_annual')} ?C (Latest) ? **{nt.get('predicted_2035')} ?C (2035)** ? **{nt.get('predicted_2050')} ?C (2050)** (`{nt.get('slope_per_year')} ?C/yr`)",
+                f"- **Topsoil Moisture (0?5 cm):** **{ns.get('latest_topsoil_0_5cm')}** (Latest) ? **{ns.get('predicted_2035')}** (2035) ? **{ns.get('predicted_2050')}** (2050)",
+                f"- **Precipitation & Solar:** **{np_rain.get('latest_annual')} mm/day** (2035 est: {np_rain.get('predicted_2035')} mm/day) | Solar: **{nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m?/day**"
+            ]))
+
         if any(has_word(ql, k) for k in ["aqi", "pollution", "air", "pm2", "pm10", "smog", "hawa"]):
             sections.append(nl.join([
-                f"**Live Air Quality at {place_resolved} ({payload.lat:.4f}?N, {payload.lon:.4f}?E):**",
+                f"**Live Air Quality ? {place_resolved} ({target_lat:.4f}?N, {target_lon:.4f}?E):**",
                 f"- **US AQI:** **{aqi_now}** ({aqi_status}) | **PM2.5:** **{pm25_now} ?g/m?** | **PM10:** **{pm10_now} ?g/m?**"
             ]))
 
         if any(has_word(ql, k) for k in ["weather", "temperature", "temp", "humidity", "wind", "climate", "forecast", "2035", "mausam"]):
-            delta_str = f"{round(float(t_2035) - float(t_2010), 2):+.2f} ?C" if (t_2010 is not None and t_2035 is not None) else "N/A"
             sections.append(nl.join([
-                f"**Live Weather & 2035 Forecast at {place_resolved} ({payload.lat:.4f}?N, {payload.lon:.4f}?E):**",
-                f"- **Live Now:** Temperature **{t_now} ?C**, Humidity **{h_now}%**, Wind **{wind_now} km/h**",
-                f"- **2010 ? 2035 OLS Trajectory:** **{t_2010} ?C** (2010) ? **{t_2035} ?C** (2035) | Net Change: **{delta_str}** ({slope_yr} ?C/yr)"
+                f"**Live Weather & NASA Forecast ? {place_resolved} ({target_lat:.4f}?N, {target_lon:.4f}?E):**",
+                f"- **Live Sensor:** Temp **{t_now} ?C**, Humidity **{h_now}%**, Wind **{wind_now} km/h**",
+                f"- **NASA OLS Forecast:** 2035 Temp **{nt.get('predicted_2035')} ?C** | 2050 Temp **{nt.get('predicted_2050')} ?C**"
             ]))
 
-    # Final fallback: exact verified telemetry for the currently active map coordinates
     if not sections:
         sections.append(nl.join([
-            f"**Verified Live Telemetry for Active Pin ? {place_resolved} ({payload.lat:.4f}?N, {payload.lon:.4f}?E):**",
-            f"- **Weather:** {t_now} ?C | Humidity {h_now}% | Wind {wind_now} km/h | 2035 Temp Forecast: **{t_2035} ?C**",
-            f"- **Air Quality:** US AQI **{aqi_now}** ({aqi_status}) | PM2.5: **{pm25_now} ?g/m?** | PM10: **{pm10_now} ?g/m?**",
+            f"**Complete Verified Report ? {place_resolved} ({target_lat:.4f}?N, {target_lon:.4f}?E):**",
+            f"- **Live Weather & Air:** **{t_now} ?C** | Humidity **{h_now}%** | US AQI **{aqi_now}** ({aqi_status}) | PM2.5 **{pm25_now} ?g/m?**",
+            f"- **NASA POWER Projections:** 2035 Temp **{nt.get('predicted_2035')} ?C** | 2050 Temp **{nt.get('predicted_2050')} ?C** | Soil Moisture **{ns.get('latest_topsoil_0_5cm')}** | Solar **{nasa_data.get('solar_irradiance_kwh_m2_day')} kWh/m?/day**",
             f"- **Nearest SQLite Mineral:** **{nearest_min['mineral']}** at *{nearest_min['deposit']}* ({nearest_min['distance_km']} km away, Grade: {nearest_min['grade']})"
         ]))
 
     return {
         "answer": (nl + nl).join(sections),
-        "source": f"Verified Live Telemetry ? {place_resolved} ({payload.lat:.2f}?N, {payload.lon:.2f}?E)",
+        "source": f"Verified Telemetry + NASA POWER ? {place_resolved} ({target_lat:.2f}?N, {target_lon:.2f}?E)",
         "mode": "verified-data"
     }
 
