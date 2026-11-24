@@ -1,192 +1,226 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 const QUICK_PROMPTS = [
-  "Analyze current live weather & AQI at my selected location",
-  "Which Indian river has the highest plastic damage and why?",
-  "Compare Bay of Bengal vs Arabian Sea plastic & sea-level stress",
-  "Explain how climate change affects soil moisture & crops by 2035",
-  "Suggest solutions to reduce plastic flow in Mahanadi & Ganga"
+  "What is the live weather, AQI, and 2050 NASA temperature forecast here?",
+  "Compare Ganga and Mahanadi plastic discharge and ecological damage",
+  "Which river basins have Iron Ore and Coal deposits?",
+  "What is the live AQI and weather in Mumbai right now?"
 ];
 
-export default function EarthnexAgent({ activeTab = "climate", locationName = "Raipur, Chhattisgarh", lat = 21.2514, lon = 81.6296 }) {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem("earthnex_gemini_key") || "");
-  const [showKeyBox, setShowKeyBox] = useState(false);
+export default function EarthnexAgent({ activeTab = "climate", location }) {
+  const lat = Number(location?.lat ?? 21.2514);
+  const lon = Number(location?.lng ?? location?.lon ?? 81.6296);
+  const locationName = location?.name || "Atal Nagar-Nava Raipur, Chhattisgarh";
+
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      source: "EARTHNEX Real-Time AI Core",
-      text: "Hello! I am EARTHNEX AI ? connected live to your SQLite Earth Database and Open-Meteo satellite/weather sensors. Ask me any question about Earth science, your active location's weather & AQI, Indian rivers, minerals, or 2035 climate forecasts in English, Hindi, or Hinglish."
+      text: `Hello! I am your EARTHNEX AI Earth Intelligence Assistant. Currently locked onto **${locationName}** (${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E). Ask me anything about live weather, US AQI, NASA POWER 2035/2050 projections, Indian river basins, or mineral deposits.`,
+      source: `EARTHNEX AI • ${locationName}`
     }
   ]);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const chatEndRef = useRef(null);
+  const [sending, setSending] = useState(false);
+  const endRef = useRef(null);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
 
-  const saveApiKey = (val) => {
-    setApiKey(val);
-    localStorage.setItem("earthnex_gemini_key", val);
-  };
+  const askAssistant = async (overrideText) => {
+    const q = (overrideText ?? input).trim();
+    if (!q || sending) return;
 
-  const sendQuestion = async (qText) => {
-    const question = (qText ?? input).trim();
-    if (!question || loading) return;
-
-    const updatedHistory = [...messages, { role: "user", text: question }];
-    setMessages(updatedHistory);
-    if (!qText) setInput("");
-    setLoading(true);
+    const nextHistory = [...messages, { role: "user", text: q }];
+    setMessages(nextHistory);
+    if (!overrideText) setInput("");
+    setSending(true);
 
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 16000);
+
       const res = await fetch(`${window.location.origin}/api/ai-agent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
-          question,
+          question: q,
           active_tab: activeTab,
           location_name: locationName,
           lat,
           lon,
-          api_key: apiKey,
-          history: updatedHistory.slice(-6)
+          history: nextHistory.slice(-6)
         })
       });
+      clearTimeout(timer);
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setMessages((prev) => [
+      const replyText = data?.answer || data?.response || data?.message;
+      if (!replyText) throw new Error("Empty payload");
+
+      setMessages(prev => [
         ...prev,
         {
           role: "assistant",
-          source: data.source || "EARTHNEX AI",
-          text: data.answer || "No response received."
+          text: replyText,
+          source: data?.source || `EARTHNEX AI • ${locationName}`
         }
       ]);
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          source: "Network Error",
-          text: "Could not reach /api/ai-agent. Please check that the FastAPI server is running on port 8000."
-        }
-      ]);
+    } catch {
+      // Direct client-side Open-Meteo backup if Render cold-starts or network lags
+      try {
+        const [wRes, aRes] = await Promise.all([
+          fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m`).then(r => r.json()),
+          fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5,pm10`).then(r => r.json())
+        ]);
+        const wc = wRes?.current || {};
+        const ac = aRes?.current || {};
+        setMessages(prev => [
+          ...prev,
+          {
+            role: "assistant",
+            text: `Here is the live sensor telemetry for **${locationName}** (${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E): Temperature is **${wc.temperature_2m ?? "--"} °C**, relative humidity is **${wc.relative_humidity_2m ?? "--"}%**, wind speed is **${wc.wind_speed_10m ?? "--"} km/h**, and live air quality is **US AQI ${ac.us_aqi ?? "--"}** (PM2.5: **${ac.pm2_5 ?? "--"} µg/m³**, PM10: **${ac.pm10 ?? "--"} µg/m³**).`,
+            source: `Live Open-Meteo Telemetry • ${locationName}`
+          }
+        ]);
+      } catch {
+        setMessages(prev => [
+          ...prev,
+          {
+            role: "assistant",
+            text: `Connected to **${locationName}** (${lat.toFixed(3)}°N, ${lon.toFixed(3)}°E). Please retry your question in a moment while the telemetry service syncs.`,
+            source: "EARTHNEX AI"
+          }
+        ]);
+      }
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: 20, background: "#0b1120", borderRadius: 16, border: "1px solid #1e293b", color: "#f8fafc", maxWidth: 980, margin: "0 auto", boxShadow: "0 12px 32px rgba(0,0,0,0.45)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 21, color: "#38bdf8", display: "flex", alignItems: "center", gap: 8 }}>
-            EARTHNEX AI ? Conversational Earth Intelligence
-          </h2>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-            Context-Aware: <strong style={{ color: "#e2e8f0" }}>{locationName}</strong> ({(Number(lat ?? 0)).toFixed(2)}? N, {(Number(lon ?? 0)).toFixed(2)}? E) ? Live SQLite + Open-Meteo
-          </div>
+    <div style={{
+      background: "#0f172a",
+      border: "1px solid #1e293b",
+      borderRadius: 12,
+      padding: 14,
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      color: "#f8fafc"
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "#38bdf8" }}>
+          EARTHNEX AI Collaborator
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ padding: "5px 11px", borderRadius: 999, background: apiKey ? "#052e16" : "#172554", color: apiKey ? "#4ade80" : "#60a5fa", fontSize: 11.5, fontWeight: 700, border: `1px solid ${apiKey ? "#166534" : "#1d4ed8"}` }}>
-            {apiKey ? "? GEMINI 2.5 LLM ACTIVE" : "? LIVE TELEMETRY MODE"}
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowKeyBox((v) => !v)}
-            style={{ padding: "5px 11px", borderRadius: 8, border: "1px solid #334155", background: "#0f172a", color: "#cbd5e1", fontSize: 12, cursor: "pointer" }}
-          >
-            {apiKey ? "API Key Saved" : "+ Add Gemini API Key"}
-          </button>
-        </div>
+        <span style={{ fontSize: 11.5, background: "#090d16", border: "1px solid #334155", padding: "3px 10px", borderRadius: 999, color: "#4ade80" }}>
+          Active Pin: {locationName} ({lat.toFixed(2)}°N, {lon.toFixed(2)}°E)
+        </span>
       </div>
 
-      {showKeyBox && (
-        <div style={{ display: "flex", gap: 8, padding: 10, background: "#090d16", borderRadius: 10, border: "1px solid #334155", alignItems: "center" }}>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => saveApiKey(e.target.value)}
-            placeholder="Paste your Google Gemini API Key (AIza...) for full generative AI reasoning..."
-            style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #334155", background: "#0f172a", color: "#f8fafc", fontSize: 13 }}
-          />
+      {/* Quick Prompt Chips */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {QUICK_PROMPTS.map((qp, idx) => (
           <button
-            type="button"
-            onClick={() => setShowKeyBox(false)}
-            style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#0284c7", color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
-          >
-            Done
-          </button>
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-        {QUICK_PROMPTS.map((qp) => (
-          <button
-            key={qp}
-            type="button"
-            onClick={() => sendQuestion(qp)}
-            style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid #334155", background: "#111827", color: "#cbd5e1", fontSize: 12, cursor: "pointer" }}
+            key={idx}
+            onClick={() => askAssistant(qp)}
+            disabled={sending}
+            style={{
+              background: "#090d16",
+              border: "1px solid #334155",
+              color: "#cbd5e1",
+              borderRadius: 999,
+              padding: "4px 10px",
+              fontSize: 11.5,
+              cursor: "pointer"
+            }}
           >
             {qp}
           </button>
         ))}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, height: 420, overflowY: "auto", padding: 14, background: "#060a14", borderRadius: 12, border: "1px solid #1e293b" }}>
-        {messages.map((m, idx) => (
+      {/* Message History */}
+      <div style={{
+        background: "#090d16",
+        border: "1px solid #1e293b",
+        borderRadius: 10,
+        padding: 12,
+        maxHeight: 340,
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10
+      }}>
+        {messages.map((m, i) => (
           <div
-            key={idx}
+            key={i}
             style={{
               alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "82%",
-              padding: "11px 15px",
-              borderRadius: 14,
-              background: m.role === "user" ? "linear-gradient(135deg, #0284c7, #0369a1)" : "#111827",
-              border: m.role === "user" ? "none" : "1px solid #1e293b",
-              whiteSpace: "pre-line",
-              fontSize: 13.5,
-              lineHeight: 1.55
+              maxWidth: "88%",
+              background: m.role === "user" ? "#0284c7" : "#1e293b",
+              color: "#f8fafc",
+              padding: "9px 12px",
+              borderRadius: 10,
+              fontSize: 13,
+              lineHeight: 1.5,
+              whiteSpace: "pre-wrap"
             }}
           >
-            {m.source && (
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#38bdf8", marginBottom: 4 }}>
-                {m.source}
-              </div>
+            <div>{m.text.replace(/\*\*/g, "")}</div>
+            {m.source && m.role === "assistant" && (
+              <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 4 }}>{m.source}</div>
             )}
-            {m.text}
           </div>
         ))}
-        {loading && (
-          <div style={{ alignSelf: "flex-start", padding: "10px 14px", borderRadius: 12, background: "#111827", border: "1px solid #1e293b", fontSize: 12.5, color: "#38bdf8" }}>
-            Analyzing live Open-Meteo sensors, SQLite Earth DB & generating response...
+        {sending && (
+          <div style={{ fontSize: 12.5, color: "#38bdf8" }}>
+            Analyzing live satellite telemetry & database records...
           </div>
         )}
-        <div ref={chatEndRef} />
+        <div ref={endRef} />
       </div>
 
+      {/* Input Form */}
       <form
-        onSubmit={(e) => {
+        onSubmit={e => {
           e.preventDefault();
-          sendQuestion();
+          askAssistant();
         }}
-        style={{ display: "flex", gap: 10 }}
+        style={{ display: "flex", gap: 8 }}
       >
         <input
           type="text"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask anything in Hindi, Hinglish, or English about Earth, climate, rivers, minerals, or AQI..."
-          style={{ flex: 1, padding: "12px 15px", borderRadius: 10, border: "1px solid #334155", background: "#0f172a", color: "#f8fafc", fontSize: 14 }}
+          onChange={e => setInput(e.target.value)}
+          placeholder="Ask about any city weather, AQI, NASA 2050 forecast, river pollution, or minerals..."
+          style={{
+            flex: 1,
+            background: "#090d16",
+            border: "1px solid #334155",
+            borderRadius: 8,
+            padding: "10px 12px",
+            color: "#f8fafc",
+            fontSize: 13
+          }}
         />
         <button
           type="submit"
-          disabled={loading}
-          style={{ padding: "12px 22px", borderRadius: 10, border: "none", background: "#0284c7", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 14 }}
+          disabled={sending || !input.trim()}
+          style={{
+            background: "#0284c7",
+            border: "none",
+            borderRadius: 8,
+            padding: "10px 18px",
+            color: "#ffffff",
+            fontWeight: 700,
+            cursor: "pointer",
+            fontSize: 13
+          }}
         >
-          Send
+          Ask AI
         </button>
       </form>
     </div>

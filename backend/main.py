@@ -16,7 +16,10 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.on_event("startup")
 def startup_event():
-    init_db()
+    try:
+        init_db()
+    except Exception:
+        pass
 
 def fetch_json(url: str, timeout: int = 5):
     req = urllib.request.Request(url, headers={"User-Agent": "EARTHNEX-AI/2.0"})
@@ -122,7 +125,10 @@ def get_climate_realtime(lat: float = 21.2514, lon: float = 81.6296, param: str 
 
 @app.get("/api/hydro-minerals")
 def get_hydro_minerals():
-    init_db()
+    try:
+        init_db()
+    except Exception:
+        pass
     conn = get_conn()
     rivers_rows = conn.execute("SELECT * FROM rivers ORDER BY plastic_tons_yr DESC").fetchall()
     deposits_rows = conn.execute("SELECT * FROM mineral_deposits").fetchall()
@@ -263,7 +269,10 @@ def query_earthnex_agent(payload: AgentQueryPayload):
     q = payload.question.strip()
     ql = q.lower()
     nl = chr(10)
-    init_db()
+    try:
+        init_db()
+    except Exception:
+        pass
 
     # 1. Natural greeting / conversational opener
     if re.fullmatch(r"(hi|hello|hey|namaste|good morning|good evening|who are you|help|what can you do)[!.?\s]*", ql):
@@ -284,14 +293,21 @@ def query_earthnex_agent(payload: AgentQueryPayload):
     target_lat, target_lon, target_hint = extract_and_geocode_city(q, payload.lat, payload.lon, payload.location_name)
 
     # 3. Query Live SQLite Database Tables
-    conn = get_conn()
-    rivers = [dict(r) for r in conn.execute("SELECT id, name, states, outlet, plastic_tons_yr, microplastic_conc, damage_score, damage_level, water_impact FROM rivers ORDER BY plastic_tons_yr DESC").fetchall()]
-    minerals = [dict(m) for m in conn.execute("SELECT river_id, mineral, deposit_name, lat, lon, grade FROM mineral_deposits").fetchall()]
-    oceans = [dict(o) for o in conn.execute("SELECT id, name, sea_level_trend, sst, wave_height, plastic_inflow, microplastic_density, damage_score, damage_status, damage_summary FROM ocean_basins ORDER BY damage_score DESC").fetchall()]
-    conn.close()
+    rivers, minerals, oceans = [], [], []
+    try:
+        conn = get_conn()
+        rivers = [dict(r) for r in conn.execute("SELECT id, name, states, outlet, plastic_tons_yr, microplastic_conc, damage_score, damage_level, water_impact FROM rivers ORDER BY plastic_tons_yr DESC").fetchall()]
+        minerals = [dict(m) for m in conn.execute("SELECT river_id, mineral, deposit_name, lat, lon, grade FROM mineral_deposits").fetchall()]
+        oceans = [dict(o) for o in conn.execute("SELECT id, name, sea_level_trend, sst, wave_height, plastic_inflow, microplastic_density, damage_score, damage_status, damage_summary FROM ocean_basins ORDER BY damage_score DESC").fetchall()]
+        conn.close()
+    except Exception:
+        pass
 
     # 4. Fetch Live Weather, Air Quality & NASA POWER Satellite Predictions
-    inspect = map_inspect(lat=target_lat, lon=target_lon)
+    try:
+        inspect = map_inspect(lat=target_lat, lon=target_lon)
+    except Exception:
+        inspect = {"place_name": target_hint, "weather": {}, "air_quality": {}, "nearest_mineral": None}
     place_resolved = inspect.get("place_name") or target_hint
     w = inspect.get("weather", {})
     aq = inspect.get("air_quality", {})
