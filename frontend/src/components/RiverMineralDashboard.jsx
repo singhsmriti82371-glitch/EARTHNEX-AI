@@ -1,3 +1,5 @@
+import MapSearchToolbar from "./MapSearchToolbar";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import React, { useState, useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap } from "react-leaflet";
 import { MapClickListener, LiveInspectBanner } from "./MapClickInspector";
@@ -77,7 +79,7 @@ function MapAutoFocus({ targetCoords, zoom }) {
   return null;
 }
 
-export default function RiverMineralDashboard({ onLocationChange }) {
+export default function RiverMineralDashboard({ location, onLocationChange, selectedDate, onDateChange, selectedTime, onTimeChange }) {
   const [rivers, setRivers] = useState(DEFAULT_RIVERS);
   const [minerals, setMinerals] = useState(DEFAULT_MINERALS);
   const [selectedRiverId, setSelectedRiverId] = useState("");
@@ -231,6 +233,15 @@ export default function RiverMineralDashboard({ onLocationChange }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <MapSearchToolbar
+        location={location}
+        onLocationChange={onLocationChange}
+        selectedDate={selectedDate}
+        onDateChange={onDateChange}
+        selectedTime={selectedTime}
+        onTimeChange={onTimeChange}
+        placeholder="Search city, river basin, or coordinates (Date & Time synced)..."
+      />
       <LiveInspectBanner inspectData={inspectData} loading={inspectLoading} onClose={() => setInspectData(null)} />
 
       {/* 1. Synchronized River Basin & Mineral Type Selector Bar */}
@@ -506,6 +517,31 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             </div>
           );
         })}
+      </div>
+
+      {/* Next 5-Year River Basin Plastic & Ecological Risk Prediction (2026 -> 2031) */}
+      <div style={{ background: "#0f172a", border: "1px solid #38bdf8", borderRadius: 12, padding: 14 }}>
+        <div style={{ fontWeight: 700, color: "#38bdf8", fontSize: 14, marginBottom: 8 }}>
+          Next 5-Year River Basin Plastic Load &amp; Ecological Damage Prediction (2026 &rarr; 2031)
+        </div>
+        <div style={{ width: "100%", height: 245 }}>
+          <ResponsiveContainer>
+            <BarChart data={[2026, 2027, 2028, 2029, 2030, 2031].map((yr, idx) => {
+              const baseR = filteredRivers[0] || rivers[0] || { plastic_tons_yr: 45000, damage_score: 70 };
+              const baseTonsK = Number(((Number(baseR.plastic_tons_yr || 45000) / 1000) * (1 + idx * 0.048)).toFixed(1));
+              const baseScore = Math.min(99, Math.round(Number(baseR.damage_score || 70) + idx * 1.8));
+              return { year: String(yr), PlasticThousandTons: baseTonsK, DamageIndexPct: baseScore };
+            })}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="year" stroke="#94a3b8" fontSize={11} />
+              <YAxis stroke="#94a3b8" fontSize={11} />
+              <Tooltip contentStyle={{ background: "#090d16", border: "1px solid #334155", color: "#f8fafc" }} />
+              <Legend />
+              <Bar dataKey="PlasticThousandTons" name="Plastic Load (Thousand Tons/yr)" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="DamageIndexPct" name="Ecological Damage Score (%)" fill="#f97316" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );

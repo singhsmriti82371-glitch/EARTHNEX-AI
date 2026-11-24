@@ -5,9 +5,9 @@ import PollutionDashboard from "./components/PollutionDashboard";
 import EarthnexAgent from "./components/EarthnexAgent";
 
 const TABS = [
-  { id: "climate", label: "1. Climate, Vegetation & Forecast" },
-  { id: "rivers", label: "2. India Rivers, Oceans & Minerals" },
-  { id: "pollution", label: "3. Pollution & AQI Flow Tracer" },
+  { id: "climate", label: "1. Climate, Vegetation & 5-Yr Forecast" },
+  { id: "rivers", label: "2. India Rivers, Minerals & 5-Yr Impact" },
+  { id: "pollution", label: "3. Pollution, AQI & 5-Yr Projection" },
   { id: "agent", label: "4. EARTHNEX AI Agent" }
 ];
 
@@ -18,6 +18,8 @@ export default function App() {
     lat: 21.2514,
     lng: 81.6296
   });
+  const [selectedDate, setSelectedDate] = useState("2026-11-24");
+  const [selectedTime, setSelectedTime] = useState("11:00");
 
   return (
     <div className="earthnex-shell">
@@ -27,7 +29,7 @@ export default function App() {
             EARTHNEX AI
           </div>
           <div style={{ fontSize: 12.5, color: "#94a3b8" }}>
-            Multi-Dashboard Earth Intelligence &bull; Active Pin: <strong style={{ color: "#e2e8f0" }}>{location.name}</strong> ({Number(location.lat).toFixed(3)}&deg;N, {Number(location.lng).toFixed(3)}&deg;E)
+            Multi-Dashboard Earth Intelligence &bull; Pin: <strong style={{ color: "#e2e8f0" }}>{location.name}</strong> ({Number(location.lat).toFixed(3)}&deg;N, {Number(location.lng).toFixed(3)}&deg;E) &bull; Date: <strong style={{ color: "#4ade80" }}>{selectedDate} {selectedTime}</strong>
           </div>
         </div>
 
@@ -54,13 +56,34 @@ export default function App() {
 
       <main className="earthnex-workspace">
         {activeTab === "climate" && (
-          <ClimateDashboard location={location} onLocationChange={setLocation} />
+          <ClimateDashboard
+            location={location}
+            onLocationChange={setLocation}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            selectedTime={selectedTime}
+            onTimeChange={setSelectedTime}
+          />
         )}
         {activeTab === "rivers" && (
-          <RiverMineralDashboard location={location} onLocationChange={setLocation} />
+          <RiverMineralDashboard
+            location={location}
+            onLocationChange={setLocation}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            selectedTime={selectedTime}
+            onTimeChange={setSelectedTime}
+          />
         )}
         {activeTab === "pollution" && (
-          <PollutionDashboard location={location} onLocationChange={setLocation} />
+          <PollutionDashboard
+            location={location}
+            onLocationChange={setLocation}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            selectedTime={selectedTime}
+            onTimeChange={setSelectedTime}
+          />
         )}
         {activeTab === "agent" && (
           <EarthnexAgent activeTab={activeTab} location={location} />
