@@ -190,7 +190,7 @@ function MapFocusController({ riverObj, oceanObj }) {
   return null;
 }
 
-export default function RiverMineralDashboard({ onContextUpdate }) {
+export default function RiverMineralDashboard({  onContextUpdate , onLocationChange }) {
 
   const [inspectData, setInspectData] = useState(null);
   const [inspectLoading, setInspectLoading] = useState(false);
@@ -201,6 +201,7 @@ export default function RiverMineralDashboard({ onContextUpdate }) {
       const res = await fetch(`${window.location.origin}/api/map-inspect?lat=${clat}&lon=${clon}`);
       const data = await res.json();
       setInspectData(data);
+      if (onLocationChange && data?.lat && data?.lon) onLocationChange({ name: data.place_name || "Clicked Pin", lat: data.lat, lng: data.lon });
       if (typeof setLoc === "function") {
         setLoc({ name: data.place_name, lat: data.lat, lng: data.lon });
       }

@@ -77,7 +77,7 @@ function CorridorFly({ corridor }) {
   return null;
 }
 
-export default function PollutionDashboard({ onContextUpdate }) {
+export default function PollutionDashboard({  onContextUpdate , onLocationChange }) {
 
   const [inspectData, setInspectData] = useState(null);
   const [inspectLoading, setInspectLoading] = useState(false);
@@ -88,6 +88,7 @@ export default function PollutionDashboard({ onContextUpdate }) {
       const res = await fetch(`${window.location.origin}/api/map-inspect?lat=${clat}&lon=${clon}`);
       const data = await res.json();
       setInspectData(data);
+      if (onLocationChange && data?.lat && data?.lon) onLocationChange({ name: data.place_name || "Clicked Pin", lat: data.lat, lng: data.lon });
       if (typeof setLoc === "function") {
         setLoc({ name: data.place_name, lat: data.lat, lng: data.lon });
       }

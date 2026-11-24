@@ -95,7 +95,7 @@ function FlyController({ loc }) {
   return null;
 }
 
-export default function ClimateDashboard({ onContextUpdate }) {
+export default function ClimateDashboard({  onContextUpdate , onLocationChange }) {
   const [liveSeries, setLiveSeries] = useState([]);
 
   const [inspectData, setInspectData] = useState(null);
@@ -107,6 +107,7 @@ export default function ClimateDashboard({ onContextUpdate }) {
       const res = await fetch(`${window.location.origin}/api/map-inspect?lat=${clat}&lon=${clon}`);
       const data = await res.json();
       setInspectData(data);
+      if (onLocationChange && data?.lat && data?.lon) onLocationChange({ name: data.place_name || "Clicked Pin", lat: data.lat, lng: data.lon });
       if (typeof setLoc === "function") {
         setLoc({ name: data.place_name, lat: data.lat, lng: data.lon });
       }
