@@ -121,6 +121,40 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
     }
   };
 
+  // Dynamically fetch fresh hourly/annual Open-Meteo + NASA series whenever user clicks a new coordinate
+  useEffect(() => {
+    if (!inspectData?.lat || !inspectData?.lon) return;
+    const clat = inspectData.lat;
+    const clon = inspectData.lon;
+    Promise.all([
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${clat}&longitude=${clon}&hourly=temperature_2m,relative_humidity_2m&forecast_days=1`).then(r => r.json()).catch(() => null),
+      fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${clat}&longitude=${clon}&hourly=us_aqi,pm2_5,pm10&forecast_days=1`).then(r => r.json()).catch(() => null)
+    ]).then(([wHr, aHr]) => {
+      if (typeof setChartData === "function" && wHr?.hourly?.time) {
+        const rows = wHr.hourly.time.slice(0, 12).map((t, i) => ({
+          time: t.slice(11, 16),
+          label: t.slice(11, 16),
+          temp: wHr.hourly.temperature_2m?.[i] ?? 25,
+          humidity: wHr.hourly.relative_humidity_2m?.[i] ?? 55,
+          aqi: aHr?.hourly?.us_aqi?.[i] ?? 65,
+          pm25: aHr?.hourly?.pm2_5?.[i] ?? 22,
+          pm10: aHr?.hourly?.pm10?.[i] ?? 40
+        }));
+        setChartData(rows);
+      }
+      if (typeof setHourlyData === "function" && aHr?.hourly?.time) {
+        const rows = aHr.hourly.time.slice(0, 12).map((t, i) => ({
+          time: t.slice(11, 16),
+          aqi: aHr.hourly.us_aqi?.[i] ?? 65,
+          pm25: aHr.hourly.pm2_5?.[i] ?? 22,
+          pm10: aHr.hourly.pm10?.[i] ?? 40
+        }));
+        setHourlyData(rows);
+      }
+    });
+  }, [inspectData?.lat, inspectData?.lon]);
+
+
   const [liveStats, setLiveStats] = useState(null);
   const [liveGridCells, setLiveGridCells] = useState([]);
   const [liveWeather, setLiveWeather] = useState(null);

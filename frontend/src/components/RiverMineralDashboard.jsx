@@ -35,7 +35,7 @@ function MapAutoFocus({ targetCoords, zoom }) {
   const map = useMap();
   useEffect(() => {
     if (targetCoords && targetCoords.length === 2) {
-      map.flyTo(targetCoords, zoom || 6, { duration: 1.1 });
+      map.flyTo(targetCoords, zoom || 5, { duration: 1.0 });
     }
   }, [targetCoords, zoom, map]);
   return null;
@@ -64,6 +64,13 @@ export default function RiverMineralDashboard({ onLocationChange }) {
 
   const handleMapClick = async (clat, clon) => {
     setInspectLoading(true);
+    setInspectData({
+      place_name: `Coordinates (${Number(clat).toFixed(3)} N, ${Number(clon).toFixed(3)} E)`,
+      lat: Number(clat.toFixed(4)),
+      lon: Number(clon.toFixed(4)),
+      weather: {},
+      air_quality: {}
+    });
     try {
       const res = await fetch(`${window.location.origin}/api/map-inspect?lat=${clat}&lon=${clon}`);
       const data = await res.json();
@@ -72,36 +79,36 @@ export default function RiverMineralDashboard({ onLocationChange }) {
         onLocationChange({ name: data.place_name || "Clicked Pin", lat: data.lat, lng: data.lon });
       }
     } catch {
-      // ignore network error
+      // keep coordinate banner active so client-side Open-Meteo still loads
     } finally {
       setInspectLoading(false);
     }
   };
 
-  // Unique mineral types available in DB
   const mineralTypes = useMemo(() => {
     const set = new Set(minerals.map(m => m.mineral).filter(Boolean));
     return Array.from(set);
   }, [minerals]);
 
-  // Determine active river(s) ONLY when user searches or selects a river
-  const activeRivers = useMemo(() => {
+  // Show ALL rivers by default; filter if a river or search query is selected
+  const visibleRivers = useMemo(() => {
     const q = searchText.trim().toLowerCase();
     if (selectedRiverId) {
       return rivers.filter(r => r.id.toLowerCase() === selectedRiverId.toLowerCase());
     }
     if (q.length >= 2) {
-      return rivers.filter(r =>
+      const matched = rivers.filter(r =>
         r.name.toLowerCase().includes(q) ||
         r.id.toLowerCase().includes(q) ||
         (r.states && r.states.toLowerCase().includes(q))
       );
+      return matched.length > 0 ? matched : rivers;
     }
-    return [];
+    return rivers;
   }, [rivers, selectedRiverId, searchText]);
 
-  // Determine active color-coded minerals ONLY when mineral type or river is searched/selected
-  const activeMinerals = useMemo(() => {
+  // Show ALL minerals by default; filter if mineral type, river, or search query is active
+  const visibleMinerals = useMemo(() => {
     const q = searchText.trim().toLowerCase();
     if (selectedMineralType) {
       return minerals.filter(m => m.mineral.toLowerCase() === selectedMineralType.toLowerCase());
@@ -110,37 +117,28 @@ export default function RiverMineralDashboard({ onLocationChange }) {
       return minerals.filter(m => (m.river_id || "").toLowerCase() === selectedRiverId.toLowerCase());
     }
     if (q.length >= 2) {
-      const matchedRiverIds = new Set(activeRivers.map(r => r.id.toLowerCase()));
-      return minerals.filter(m =>
+      const matched = minerals.filter(m =>
         m.mineral.toLowerCase().includes(q) ||
         (m.deposit_name && m.deposit_name.toLowerCase().includes(q)) ||
-        matchedRiverIds.has((m.river_id || "").toLowerCase())
+        (m.river_id && m.river_id.toLowerCase().includes(q))
       );
+      return matched.length > 0 ? matched : minerals;
     }
-    return [];
-  }, [minerals, selectedMineralType, selectedRiverId, searchText, activeRivers]);
+    return minerals;
+  }, [minerals, selectedMineralType, selectedRiverId, searchText]);
 
-  // Compute map fly-to target when a river or mineral is searched/selected
   const focusView = useMemo(() => {
-    if (activeRivers.length > 0) {
-      const path = RIVER_PATHS[activeRivers[0].id.toLowerCase()];
-      if (path && path.length > 0) {
-        return { coords: path[Math.floor(path.length / 2)], zoom: 6 };
-      }
+    if (selectedRiverId && visibleRivers.length > 0) {
+      const path = RIVER_PATHS[visibleRivers[0].id.toLowerCase()];
+      if (path && path.length > 0) return { coords: path[Math.floor(path.length / 2)], zoom: 6 };
     }
-    if (activeMinerals.length > 0) {
-      return { coords: [activeMinerals[0].lat, activeMinerals[0].lon], zoom: 6 };
+    if (selectedMineralType && visibleMinerals.length > 0) {
+      return { coords: [visibleMinerals[0].lat, visibleMinerals[0].lon], zoom: 6 };
     }
     return { coords: [22.35, 81.5], zoom: 5 };
-  }, [activeRivers, activeMinerals]);
+  }, [selectedRiverId, selectedMineralType, visibleRivers, visibleMinerals]);
 
-  const hasActiveFilter = Boolean(selectedRiverId || selectedMineralType || searchText.trim().length >= 2);
-
-  const clearSelection = () => {
-    setSearchText("");
-    setSelectedRiverId("");
-    setSelectedMineralType("");
-  };
+  const hasActiveFilter = Boolean(selectedRiverId || selectedMineralType || searchText.trim().length > 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -165,7 +163,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             setSelectedRiverId("");
             setSelectedMineralType("");
           }}
-          placeholder="Search river (e.g. Ganga, Mahanadi) or mineral (Iron Ore, Coal)..."
+          placeholder="Filter river (Ganga, Mahanadi) or mineral (Iron Ore, Coal)..."
           style={{
             background: "#090d16",
             border: "1px solid #334155",
@@ -192,7 +190,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             fontSize: 13
           }}
         >
-          <option value="">-- Select River Basin (Hidden by Default) --</option>
+          <option value="">All River Basins ({rivers.length})</option>
           {rivers.map(r => (
             <option key={r.id} value={r.id}>{r.name}</option>
           ))}
@@ -214,7 +212,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             fontSize: 13
           }}
         >
-          <option value="">-- Select Mineral Type (Color-Coded) --</option>
+          <option value="">All Mineral Deposits ({minerals.length})</option>
           {mineralTypes.map(mt => (
             <option key={mt} value={mt}>{mt}</option>
           ))}
@@ -222,7 +220,11 @@ export default function RiverMineralDashboard({ onLocationChange }) {
 
         {hasActiveFilter && (
           <button
-            onClick={clearSelection}
+            onClick={() => {
+              setSearchText("");
+              setSelectedRiverId("");
+              setSelectedMineralType("");
+            }}
             style={{
               background: "#1e293b",
               border: "1px solid #38bdf8",
@@ -234,12 +236,12 @@ export default function RiverMineralDashboard({ onLocationChange }) {
               fontSize: 13
             }}
           >
-            Clear Map Selection
+            Show All Rivers & Minerals
           </button>
         )}
       </div>
 
-      {/* Color-Coded Mineral Legend (Visible when minerals are active or for reference) */}
+      {/* Color-Coded Mineral Legend */}
       <div style={{
         display: "flex",
         flexWrap: "wrap",
@@ -251,7 +253,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
         padding: "8px 12px",
         fontSize: 12
       }}>
-        <span style={{ color: "#94a3b8", fontWeight: 600 }}>Mineral Color Key (Click to Highlight):</span>
+        <span style={{ color: "#94a3b8", fontWeight: 600 }}>Mineral Color Legend:</span>
         {Object.entries(MINERAL_COLORS).map(([name, color]) => {
           const isSelected = selectedMineralType.toLowerCase() === name.toLowerCase();
           return (
@@ -282,26 +284,9 @@ export default function RiverMineralDashboard({ onLocationChange }) {
         })}
       </div>
 
-      {/* Interactive Map: Clean by Default ? Renders River Path & Colored Minerals Only When Searched/Selected */}
-      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b", position: "relative" }}>
-        {!hasActiveFilter && (
-          <div style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            zIndex: 999,
-            background: "rgba(15, 23, 42, 0.9)",
-            border: "1px solid #38bdf8",
-            color: "#e2e8f0",
-            padding: "6px 12px",
-            borderRadius: 8,
-            fontSize: 12
-          }}>
-            Search or select a <strong>River</strong> or <strong>Mineral Type</strong> above to highlight it on the map.
-          </div>
-        )}
-
-        <MapContainer center={[22.35, 81.5]} zoom={5} style={{ height: 420, width: "100%" }}>
+      {/* Full Interactive River & Mineral Map */}
+      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
+        <MapContainer center={[22.35, 81.5]} zoom={5} style={{ height: 430, width: "100%" }}>
           <TileLayer
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
             attribution="&copy; OpenStreetMap &copy; CARTO"
@@ -309,15 +294,15 @@ export default function RiverMineralDashboard({ onLocationChange }) {
           <MapClickListener onMapClick={handleMapClick} />
           <MapAutoFocus targetCoords={focusView.coords} zoom={focusView.zoom} />
 
-          {/* Render ONLY the searched/selected river polyline */}
-          {activeRivers.map(r => {
+          {visibleRivers.map(r => {
             const coords = RIVER_PATHS[r.id.toLowerCase()];
             if (!coords) return null;
+            const riverColor = r.damage_score > 75 ? "#ef4444" : r.damage_score > 60 ? "#f59e0b" : "#38bdf8";
             return (
               <Polyline
                 key={r.id}
                 positions={coords}
-                pathOptions={{ color: "#38bdf8", weight: 5, opacity: 0.92 }}
+                pathOptions={{ color: riverColor, weight: 4.5, opacity: 0.9 }}
               >
                 <Popup>
                   <strong>{r.name}</strong><br />
@@ -329,14 +314,13 @@ export default function RiverMineralDashboard({ onLocationChange }) {
             );
           })}
 
-          {/* Render ONLY the searched/selected color-coded mineral deposits */}
-          {activeMinerals.map((m, idx) => {
+          {visibleMinerals.map((m, idx) => {
             const pinColor = getMineralColor(m.mineral);
             return (
               <CircleMarker
                 key={`${m.deposit_name}-${idx}`}
                 center={[m.lat, m.lon]}
-                radius={9}
+                radius={8}
                 pathOptions={{
                   color: "#ffffff",
                   weight: 1.5,
@@ -356,39 +340,19 @@ export default function RiverMineralDashboard({ onLocationChange }) {
         </MapContainer>
       </div>
 
-      {/* Details Cards for Searched River or Mineral */}
-      {activeRivers.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 10 }}>
-          {activeRivers.map(r => (
-            <div key={r.id} style={{ background: "#0f172a", border: "1px solid #38bdf8", borderRadius: 10, padding: 12 }}>
-              <div style={{ fontWeight: 700, color: "#38bdf8", fontSize: 15 }}>{r.name}</div>
-              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>{r.states} ? Outlet: {r.outlet}</div>
-              <div style={{ fontSize: 13, color: "#e2e8f0" }}>
-                Plastic Discharge: <strong>{r.plastic_tons_yr?.toLocaleString()} Tons/yr</strong> ? Damage: <strong>{r.damage_score}%</strong> ({r.damage_level})
-              </div>
-              <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 4 }}>{r.water_impact}</div>
+      {/* River & Mineral Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 10 }}>
+        {visibleRivers.map(r => (
+          <div key={r.id} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, color: "#38bdf8", fontSize: 15 }}>{r.name}</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>{r.states} ? Outlet: {r.outlet}</div>
+            <div style={{ fontSize: 13, color: "#e2e8f0" }}>
+              Plastic: <strong>{r.plastic_tons_yr?.toLocaleString()} Tons/yr</strong> ? Damage: <strong>{r.damage_score}%</strong> ({r.damage_level})
             </div>
-          ))}
-        </div>
-      )}
-
-      {activeMinerals.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
-          {activeMinerals.map((m, idx) => {
-            const badgeColor = getMineralColor(m.mineral);
-            return (
-              <div key={`${m.deposit_name}-card-${idx}`} style={{ background: "#0f172a", border: `1px solid ${badgeColor}`, borderRadius: 10, padding: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: badgeColor }} />
-                  <strong style={{ color: badgeColor, fontSize: 14 }}>{m.mineral}</strong>
-                </div>
-                <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: 13, marginTop: 4 }}>{m.deposit_name}</div>
-                <div style={{ fontSize: 12, color: "#94a3b8" }}>Grade: {m.grade} ? Basin: {(m.river_id || "").toUpperCase()}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+            <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 4 }}>{r.water_impact}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
