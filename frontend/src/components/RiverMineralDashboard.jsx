@@ -289,7 +289,7 @@ export default function RiverMineralDashboard({ onLocationChange }) {
       <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #1e293b" }}>
         <MapContainer center={[22.35, 81.5]} zoom={5} style={{ height: 430, width: "100%" }}>
           <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap &copy; CARTO"
           />
           <MapClickListener onMapClick={handleMapClick} />
