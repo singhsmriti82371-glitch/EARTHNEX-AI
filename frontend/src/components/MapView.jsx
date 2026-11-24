@@ -49,7 +49,7 @@ function MapClickHandler({ onPick }) {
       onPick({
         lat: Number(e.latlng.lat.toFixed(4)),
         lng: Number(e.latlng.lng.toFixed(4)),
-        name: `Pinned (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`
+        name: `Pinned (${(Number(e.latlng.lat ?? 0)).toFixed(4)}, ${(Number(e.latlng.lng ?? 0)).toFixed(4)})`
       });
     }
   });
@@ -77,8 +77,8 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
   const [localEndYear, setLocalEndYear] = useState(yearRange?.end ?? 2026);
 
   useEffect(() => {
-    setLatInput(Number(pt.lat).toFixed(4));
-    setLngInput(Number(pt.lng).toFixed(4));
+    (Number(setLatInput(Number(pt.lat) ?? 0)).toFixed(4));
+    (Number(setLngInput(Number(pt.lng) ?? 0)).toFixed(4));
   }, [pt.lat, pt.lng]);
 
   useEffect(() => {
@@ -115,7 +115,7 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
     const parsedLat = parseFloat(latInput);
     const parsedLng = parseFloat(lngInput);
     if (!isNaN(parsedLat) && !isNaN(parsedLng) && parsedLat >= -90 && parsedLat <= 90 && parsedLng >= -180 && parsedLng <= 180) {
-      onPick({ lat: parsedLat, lng: parsedLng, name: `Lat ${parsedLat.toFixed(4)}, Lon ${parsedLng.toFixed(4)}` });
+      onPick({ lat: parsedLat, lng: parsedLng, name: `Lat ${(Number(parsedLat ?? 0)).toFixed(4)}, Lon ${(Number(parsedLng ?? 0)).toFixed(4)}` });
     }
   };
 
@@ -126,11 +126,11 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
     const baseVal =
       featureMode === "temperature" ? (live?.weather?.temperature_2m ?? 29.2) :
       featureMode === "humidity" ? (live?.weather?.relative_humidity_2m ?? 62) :
-      Number(((live?.soil?.moisture ?? 0.30) + 0.28).toFixed(2));
+      Number(((live?.soil?.moisture ?? 0.30) + (Number(0.28) ?? 0)).toFixed(2));
 
     const slopePerDecade = trend?.slope_per_decade ?? (featureMode === "temperature" ? 0.38 : featureMode === "humidity" ? 1.8 : 0.03);
-    const netChange = Number(((slopePerDecade / 10) * spanYears).toFixed(2));
-    const startVal = Number((baseVal - netChange).toFixed(2));
+    const netChange = Number(((slopePerDecade / 10) * (Number(spanYears) ?? 0)).toFixed(2));
+    const startVal = Number((baseVal - (Number(netChange) ?? 0)).toFixed(2));
     const endVal = Number(baseVal.toFixed(2));
 
     const step = 0.045; // ~5 km per grid cell
@@ -146,14 +146,14 @@ export default function MapView({ pt, flyKey, variable = "temperature", live, tr
         const distFromCore = Math.sqrt(r * r + c * c);
         const directionalBias = (r * 0.15) - (c * 0.12);
         const intensity = Math.max(0, Math.min(4, Math.round(4 - distFromCore * 1.15 + directionalBias)));
-        const cellDelta = Number((netChange * (1.25 - distFromCore * 0.22)).toFixed(2));
-        const cellCurrent = Number((endVal + (2 - distFromCore) * (featureMode === "vegetation" ? -0.05 : 0.45)).toFixed(2));
+        const cellDelta = Number((netChange * (1.25 - distFromCore * (Number(0.22)) ?? 0)).toFixed(2));
+        const cellCurrent = Number((endVal + (2 - distFromCore) * (featureMode === "vegetation" ? -0.05 : (Number(0.45)) ?? 0)).toFixed(2));
 
         cells.push({
           id: `${r}_${c}`,
           bounds: [[south, west], [north, east]],
-          centerLat: ((south + north) / 2).toFixed(4),
-          centerLon: ((west + east) / 2).toFixed(4),
+          centerLat: ((south + north) / (Number(2) ?? 0)).toFixed(4),
+          centerLon: ((west + east) / (Number(2) ?? 0)).toFixed(4),
           color: cfg.palette[intensity],
           cellCurrent,
           cellDelta

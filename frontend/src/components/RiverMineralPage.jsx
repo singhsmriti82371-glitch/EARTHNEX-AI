@@ -134,7 +134,7 @@ export default function RiverMineralPage() {
             mineral: zone.mineral,
             basinLocation: zone.name,
             grade: zone.grade,
-            coords: `${zone.lat.toFixed(2)} N, ${zone.lon.toFixed(2)} E`
+            coords: `${(Number(zone.lat ?? 0)).toFixed(2)} N, ${(Number(zone.lon ?? 0)).toFixed(2)} E`
           });
         });
     });

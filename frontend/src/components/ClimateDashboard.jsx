@@ -80,7 +80,7 @@ function ClickHandler({ onSelect }) {
       onSelect({
         lat: Number(e.latlng.lat.toFixed(4)),
         lng: Number(e.latlng.lng.toFixed(4)),
-        name: `Pinned (${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)})`
+        name: `Pinned (${(Number(e.latlng.lat ?? 0)).toFixed(4)}, ${(Number(e.latlng.lng ?? 0)).toFixed(4)})`
       });
     }
   });
@@ -139,8 +139,8 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
   const timeSlot = TIME_SLOTS.find((t) => t.id === selectedTime) || TIME_SLOTS[1];
 
   useEffect(() => {
-    setLatInput(loc.lat.toFixed(4));
-    setLngInput(loc.lng.toFixed(4));
+    (Number(setLatInput(loc.lat ?? 0)).toFixed(4));
+    (Number(setLngInput(loc.lng ?? 0)).toFixed(4));
   }, [loc]);
 
   const handleSearch = async (val) => {
@@ -159,7 +159,7 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
     const la = parseFloat(latInput);
     const lo = parseFloat(lngInput);
     if (!isNaN(la) && !isNaN(lo) && la >= -90 && la <= 90 && lo >= -180 && lo <= 180) {
-      setLoc({ lat: la, lng: lo, name: `Custom (${la.toFixed(4)}, ${lo.toFixed(4)})` });
+      setLoc({ lat: la, lng: lo, name: `Custom (${(Number(la ?? 0)).toFixed(4)}, ${(Number(lo ?? 0)).toFixed(4)})` });
     }
   };
 
@@ -196,8 +196,8 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
       : (selectedItem.historical ?? selectedItem.predicted);
     const pastVal = startItem.historical;
     const futureVal = future2035.predicted;
-    const histChange = Number((currentVal - pastVal).toFixed(2));
-    const futureChange = Number((futureVal - currentVal).toFixed(2));
+    const histChange = Number((currentVal - (Number(pastVal) ?? 0)).toFixed(2));
+    const futureChange = Number((futureVal - (Number(currentVal) ?? 0)).toFixed(2));
 
     // 5x5 Spatial Lat/Lon Heatmap Grid
     const step = 0.045;
@@ -211,12 +211,12 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
         const dist = Math.sqrt(r * r + c * c);
         const bias = r * 0.15 - c * 0.12;
         const idx = Math.max(0, Math.min(4, Math.round(4 - dist * 1.15 + bias)));
-        const cellVal = Number((currentVal * (1 + (2 - dist) * 0.04)).toFixed(2));
+        const cellVal = Number((currentVal * (1 + (2 - dist) * (Number(0.04)) ?? 0)).toFixed(2));
         cells.push({
           id: `${r}_${c}`,
           bounds: [[south, west], [north, east]],
-          centerLat: ((south + north) / 2).toFixed(4),
-          centerLon: ((west + east) / 2).toFixed(4),
+          centerLat: ((south + north) / (Number(2) ?? 0)).toFixed(4),
+          centerLon: ((west + east) / (Number(2) ?? 0)).toFixed(4),
           color: cfg.palette[idx],
           val: cellVal
         });
@@ -353,7 +353,7 @@ export default function ClimateDashboard({  onContextUpdate , onLocationChange }
             <Marker position={[loc.lat, loc.lng]} icon={pinIcon}>
               <Popup>
                 <b>{loc.name}</b><br />
-                Lat: {loc.lat.toFixed(4)} N | Lon: {loc.lng.toFixed(4)} E<br />
+                Lat: {(Number(loc.lat ?? 0)).toFixed(4)} N | Lon: {(Number(loc.lng ?? 0)).toFixed(4)} E<br />
                 {selectedDate} ({timeSlot.label})
               </Popup>
             </Marker>

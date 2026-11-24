@@ -16,7 +16,7 @@ export default function TrendChart({ trend }) {
           <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} domain={["auto", "auto"]} width={44}
             tickFormatter={(v) => (Math.abs(v) >= 100 ? Math.round(v) : Number(v.toFixed(2)))} />
           <Tooltip contentStyle={{ background: "#020617", border: "1px solid #22d3ee55", fontSize: 12 }}
-            formatter={(v) => (Array.isArray(v) ? v.map((x) => x.toFixed(2)).join(" – ") : Number(v).toFixed(2))} />
+            formatter={(v) => (Array.isArray(v) ? v.map((x) => (Number(x ?? 0)).toFixed(2)).join(" – ") : Number(v).toFixed(2))} />
           <Area dataKey="band" stroke="none" fill="#8b5cf6" fillOpacity={0.22} name="95% band" />
           <Line dataKey="value" stroke="#22d3ee" dot={false} strokeWidth={2} name="Observed" />
           <Line dataKey="pred" stroke="#a78bfa" strokeDasharray="5 4" dot={false} strokeWidth={2} name="Forecast" />

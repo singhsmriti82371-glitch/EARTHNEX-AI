@@ -85,7 +85,7 @@ export default function EarthnexAgent({ activeTab = "climate", locationName = "R
             EARTHNEX AI ? Conversational Earth Intelligence
           </h2>
           <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-            Context-Aware: <strong style={{ color: "#e2e8f0" }}>{locationName}</strong> ({lat.toFixed(2)}? N, {lon.toFixed(2)}? E) ? Live SQLite + Open-Meteo
+            Context-Aware: <strong style={{ color: "#e2e8f0" }}>{locationName}</strong> ({(Number(lat ?? 0)).toFixed(2)}? N, {(Number(lon ?? 0)).toFixed(2)}? E) ? Live SQLite + Open-Meteo
           </div>
         </div>
 

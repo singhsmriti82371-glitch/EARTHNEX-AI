@@ -10,7 +10,7 @@ export default function Panel(p) {
   return (
     <aside className="panel">
       <div className="loc">
-        <h3>📍 {pt.name ? `${pt.name} · ` : ""}{pt.lat.toFixed(2)}, {pt.lng.toFixed(2)}</h3>
+        <h3>📍 {pt.name ? `${pt.name} · ` : ""}{(Number(pt.lat ?? 0)).toFixed(2)}, {(Number(pt.lng ?? 0)).toFixed(2)}</h3>
         <button className="ghost" onClick={p.onSave}>★ Save</button>
       </div>
 
@@ -43,11 +43,11 @@ export default function Panel(p) {
         {trend && !trendLoading && (
           <>
             <span className={`badge ${trend.trend === "increasing" ? "up" : trend.trend === "decreasing" ? "down" : "flat"}`}>
-              {trend.trend} · {trend.slope_per_decade.toFixed(3)} {trend.unit}/decade
+              {trend.trend} · {(Number(trend.slope_per_decade ?? 0)).toFixed(3)} {trend.unit}/decade
             </span>{" "}
-            <span className="badge sig">{trend.significant ? "significant" : "not significant"} (p={trend.p.toFixed(3)})</span>
+            <span className="badge sig">{trend.significant ? "significant" : "not significant"} (p={(Number(trend.p ?? 0)).toFixed(3)})</span>
             <TrendChart trend={trend} />
-            <small className="muted">{trend.method}{trend.pct_per_decade != null ? ` · ${trend.pct_per_decade.toFixed(1)}% per decade` : ""}</small>
+            <small className="muted">{trend.method}{trend.pct_per_decade != null ? ` · ${(Number(trend.pct_per_decade ?? 0)).toFixed(1)}% per decade` : ""}</small>
           </>
         )}
       </Card>
@@ -62,7 +62,7 @@ export default function Panel(p) {
         {corr?.pairs.map((c, i) => (
           <div key={i} className="row">
             <span>{NAMES[c.a]} ↔ {NAMES[c.b]}</span>
-            <b>{c.r.toFixed(2)} <em>{c.strength}</em></b>
+            <b>{(Number(c.r ?? 0)).toFixed(2)} <em>{c.strength}</em></b>
           </div>
         ))}
       </Card>
@@ -74,7 +74,7 @@ export default function Panel(p) {
             <div className="row"><span>Score within {prospect.radius_km} km</span><b>{Math.round(prospect.score * 100)}%</b></div>
             {prospect.nearby.length === 0 && <p className="muted">No seeded occurrences nearby.</p>}
             {prospect.nearby.slice(0, 4).map((m) => (
-              <div key={m.id} className="row small"><span>{m.mineral} · {m.name}</span><span>{m.distance_km.toFixed(0)} km</span></div>
+              <div key={m.id} className="row small"><span>{m.mineral} · {m.name}</span><span>{(Number(m.distance_km ?? 0)).toFixed(0)} km</span></div>
             ))}
           </>
         )}
@@ -100,7 +100,7 @@ export default function Panel(p) {
         {L && <Skeleton h={30} />}
         {live && live.nearby_events.length === 0 && <p className="muted">No open NASA/USGS events nearby.</p>}
         {live?.nearby_events.slice(0, 4).map((e, i) => (
-          <div key={i} className="row small"><span>{e.type}: {e.title.slice(0, 34)}</span><span>{e.distance_km.toFixed(0)} km</span></div>
+          <div key={i} className="row small"><span>{e.type}: {e.title.slice(0, 34)}</span><span>{(Number(e.distance_km ?? 0)).toFixed(0)} km</span></div>
         ))}
       </Card>
 

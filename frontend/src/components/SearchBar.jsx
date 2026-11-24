@@ -84,7 +84,7 @@ export default function SearchBar({ onPick }) {
               onClick={() => selectPlace(r)}
               style={{ padding: "8px 12px", fontSize: 12.5, color: "#f1f5f9", cursor: "pointer", borderBottom: "1px solid #1e293b" }}
             >
-              📍 <b>{r.name}</b> <span style={{ color: "#94a3b8", fontSize: 11 }}>({Number(r.lat).toFixed(2)}, {Number(r.lon ?? r.lng).toFixed(2)})</span>
+              📍 <b>{r.name}</b> <span style={{ color: "#94a3b8", fontSize: 11 }}>({Number(r.lat).toFixed(2)}, {Number(r.lon ?? (Number(r.lng) ?? 0)).toFixed(2)})</span>
             </div>
           ))}
         </div>
